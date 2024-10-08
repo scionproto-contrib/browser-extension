@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <!-- TODO: Add the purged css version for production use -->
+    <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        h3 {
+            min-width: 300px;
+            text-align: center;
+        }
+
+        body {
+            background: rgb(248, 247, 250);
+            background: linear-gradient(90deg, rgba(248, 247, 250, 1) 0%, rgba(230, 230, 238, 1) 35%, rgba(228, 240, 242, 1) 100%);
+        }
+
+        input.halfchecked~.dot {
+            transform: translateX(125%) !important;
+            /*background-color: #bb8048;*/
+        }
+
+        input~.dot {
+            transform: translateX(230%);
+            /*background-color: #48bb78;*/
+        }
+
+
+        .ac-label {
+            position: relative;
+            padding: .5em 1em;
+            padding-left: 2.5em;
+            margin-bottom: .5em;
+            display: block;
+            cursor: pointer;
+            transition: background-color .15s ease-in-out;
+        }
+
+        .ac-input:checked+label,
+        .ac-label:hover {
+            /* Change text color */
+        }
+
+        .flag-container {
+            max-width: 200px;
+            height: 50px;
+            margin: 0 auto;
+            display: flex;
+            gap: 2px;
+        }
+
+        .flag-container img {
+            width: 100%;
+            height: 50%;
+        }
+
+        .flag-container .description {
+            text-align: center;
+        }
+
+        .ac-label:after,
+        .ac-input:checked+.ac-label:after {
+            content: "+";
+            position: absolute;
+            display: hidden;
+            left: 0;
+            top: -4px;
+            width: 2em;
+            height: 100%;
+            line-height: 2.25em;
+            text-align: center;
+            transition: background-color .15s ease-in-out;
+        }
+
+        .ac-input:checked+.ac-label:after {
+            content: "-";
+        }
+
+        .ac-input {
+            display: none;
+        }
+
+        .ac-text,
+        .ac-sub-text {
+            opacity: 0;
+            height: 0;
+            margin-bottom: .5em;
+            transition: opacity .5s ease-in-out;
+            overflow: hidden;
+        }
+
+        .ac-input:checked~.ac-text,
+        .ac-sub .ac-input:checked~.ac-sub-text {
+            opacity: 1;
+            height: auto;
+        }
+
+        .ac-sub .ac-label {
+            background: none;
+            font-weight: 600;
+            padding: .1em 2em;
+            font-size: 14px;
+            margin-bottom: 0;
+        }
+
+        .ac-sub .ac-label:checked {
+            background: none;
+            border-bottom: 1px solid whitesmoke;
+        }
+
+        .ac-sub .ac-label:after,
+        .ac-sub .ac-input:checked+.ac-label:after {
+            left: 0;
+            background: none;
+        }
+
+        .ac-sub .ac-input:checked+label,
+        .ac-sub .ac-label:hover {
+            background: none;
+        }
+
+        .ac-sub-text {
+            padding: 0 1em 0 2em;
+        }
+
+        #ac-label-main {
+            padding-left: 0.5em !important;
+        }
+
+        #ac-label-main:after {
+            width: 0px !important;
+            content: unset !important;
+        }
+    </style>
+</head>
+
+<body style="padding: 1em;">
+    <h3 id="scionsupport" class="text-lg text-left font-bold mb-3 mt-3"></h3>
+    <div id="domainlist" class="w-100 mb-4"></div>
+    <hr />
+
+    <div class="flex justify-center mb-2" id="scionModePreference">
+        <label for="toogleA" class="flex items-center cursor-pointer">
+            <div id="maindomain" class="mr-3 text-gray-700 font-medium text-sm ">
+
+            </div>
+            <div class="flex flex-col" style="width: 95px;" class="items-center">
+                <!-- toggle -->
+                <div class="relative" id="checkboxRunning" style="margin: auto;">
+                    <!-- input -->
+                    <input id="toggleRunning" type="checkbox" class="sr-only" onchange="toggleExtensionRunning();" />
+                    <!-- line -->
+                    <div id="lineRunning" class="w-12 h-4 bg-gray-400 rounded-full shadow-inner"></div>
+                    <!-- dot -->
+                    <div class="dot absolute w-4 h-4 bg-white rounded-full shadow -left-1 -top-0 transition"></div>
+                </div>
+                <span id="scionmode" style="font-size: 11px; text-align: center;"></span>
+            </div>
+            <!-- label -->
+        </label>
+    </div>
+    <hr />
+
+    <div class="flex">
+        <button
+            class="px-2 py-1 rounded-md text-sm font-medium border-0 focus:outline-none focus:ring transition text-blue-600 hover:text-blue-800 active:bg-blue-200 focus:ring-blue-300"
+            id="button-options">Manage Preferences...</button>
+    </div>
+    <hr />
+
+    <div class="ac">
+        <input class="ac-input" id="ac-1" name="ac-1" type="checkbox" />
+        <label id="ac-label-main"
+            class="ac-label text-sm font-medium border-0 focus:outline-none focus:ring transition text-blue-600 hover:text-blue-800 active:bg-blue-200 focus:ring-blue-300"
+            for="ac-1">Path Usage...</label>
+        <article class="ac-text" id="path-usage-container"></article>
+    </div>
+
+    <script src="shared/storage.js"></script>
+    <script src="popup.js"></script>
+</body>
+
+</html>
