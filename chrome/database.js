@@ -1,3 +1,4 @@
+// Copyright 2024 ETH Zurich, Ovgu
 
 const database = {
     requests: [],
