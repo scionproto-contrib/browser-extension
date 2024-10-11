@@ -43,9 +43,9 @@ If your network domain offers an in-network proxy, double check with your networ
 Self-hosted Proxy option
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-If you rather prefer to run your own proxy, you can follow the instructions in the `documentation <https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html#id10>`_.
+If you rather prefer to run your own proxy, you can follow the instructions in the `documentation <https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html#running-the-scion-http-forward-proxy-locally>`__.
 Please note that for the latter, you will need to follow the instructions to enable a SCION endhost stack on your machine. 
-The `documentation <https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html#prerequisites>`_ provides a detailed guide on how to set it up.
+The `documentation <https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html#prerequisites>`__ provides a detailed guide on how to set it up.
 
 Installation
 ------------
@@ -82,8 +82,6 @@ To configure the ISD whitelist, press the `Options` button. SCION traffic will t
 .. image:: images/geofence_options.png
     :alt: Geofence options
 
-For instance, in the image above SCION traffic will be forwarded through ISD-19 in EU and the ISD-17 in Switzerland.
-
 Path usage information
 -----------------------
 
@@ -91,8 +89,9 @@ The extension provides path information to the user about the path used during t
 It provides visual information about the ISD traversed, the exchanged data amount and detailed information about the traversed ASes.
 
 .. note::
-    At the moment, path information is only available if you have previously configured geofencing policies for the extension. 
-    This is due to security concerns, although might change in the future.
+    At the moment, path information is only available if you have previously configured geofencing policies for the extension.
+    One can configure the "Allow all traffic" option to see the path information, while allowing traffic to any ISD.
+    This is due to security concerns, although it is not a future compromise.
 
 .. image:: images/path_usage_extension.png
     :alt: Path usage
