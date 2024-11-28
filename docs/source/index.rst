@@ -23,8 +23,8 @@ Requirements
 ------------
 
 The extension interacts with the `SCION HTTP Forward Proxy <https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html>`_ to fetch resources via SCION.
-As stated in the documentatin, the SCION HTTP Forward Proxy can be connected to either the SCION production network, e.g., being part of the `SCIERA ISD <https://sciera.readthedocs.io/en/latest/>`_ or
-it can be part of the `SCIONLab network <https://www.scionlab.org/>`_, e.g., you are running your own SCIONLab AS and have already set uo the `SCION HTTP Forward Proxy <https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html>`_ .
+As stated in the documentation, the SCION HTTP Forward Proxy can be connected to either the SCION production network, e.g., being part of the `SCIERA ISD <https://sciera.readthedocs.io/en/latest/>`_ or
+it can be part of the `SCIONLab network <https://www.scionlab.org/>`_, e.g., you are running your own SCIONLab AS and have already set up the `SCION HTTP Forward Proxy <https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html>`_ .
 
 More information on the different SCION networks and how to access them can be found at https://docs.scion.org/projects/scion-applications/en/latest/applications/access.html 
 
