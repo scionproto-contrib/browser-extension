@@ -2,7 +2,7 @@
 'use strict';
 
 const proxyScheme = "https"
-const proxyHost = "forward-proxy.scionlab";
+const proxyHost = "forward-proxy.scion";
 const proxyPort = "9443";
 const proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`
 const proxyPathUsagePath = "/path-usage"
