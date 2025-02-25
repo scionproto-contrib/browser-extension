@@ -150,7 +150,13 @@ function setPolicy(policy) {
             console.log("response code to setPolicy:" + req.status);
             console.log("set policy: ", JSON.stringify(policy))
 
+            if (req.status != 200) {
+                console.error("Error setting policy: ", req.status)
+                return
+            }
+
             chrome.cookies.getAll({ name: "caddy-scion-forward-proxy" }, function (cookies) {
+                console.log("all cookies: ", cookies)
                 cookies = cookies.filter((c) => c.domain == proxyHost)
                 if (cookies.length > 1) {
                     console.log("expected at most one cookie")
@@ -161,24 +167,44 @@ function setPolicy(policy) {
 
                 if (cookies.length > 0) {
                     policyCookie = cookies[0]
-                    console.log("new path policy cookie: ", cookies[0].value)
+                    console.log("new path policy cookie: ", cookies[0])
+
+                    // when we set the cookie before (function below), the cookie
+                    // is set with ".forward-proxy.scion" as domain (probably since we remove the hostOnly [because of the API]).
+                    // The incoming cookie is set with "forward-proxy.scion" as domain.
+                    // Since it is convoluted to remove one of the cookies, we just set the cookie again
+                    // to avoid inconsistencies between the two of them. Otherwise, calls to /path-usage (which carry the cookie)
+                    // have been observer to yield incorrect information.
+
+                    // we have to remove some fields that are not allowed to be set
+                    // by the API
+                    delete policyCookie["hostOnly"];
+                    delete policyCookie["session"];
+                    policyCookie.url = `${proxyScheme}://${proxyHost}`;
+                    chrome.cookies.set(policyCookie)
                 }
             })
-
         };
 
         req.send(JSON.stringify(policy));
     }
 
     // this not only clears all cookies but also the proxy auth credentials
-    chrome.browsingData.remove({ "origins": [`${proxyScheme}://${proxyHost}`] }, { "cookies": true }, () => {
+    chrome.browsingData.remove({ 
+        "origins": [
+            `${proxyScheme}://${proxyHost}`
+        ] }, { "cookies": true }, () => {
         // as we have just removed all cookie we have to readd it
         if (policyCookie != null) {
-            delete policyCookie["hostOnly"]
-            delete policyCookie["session"]
-            policyCookie["url"] = proxyAddress
 
             chrome.cookies.set(policyCookie, () => {
+                chrome.cookies.get({
+                    url: policyCookie.url,
+                    name: policyCookie.name
+                  }, (resultCookie) => {
+                    console.log("Stored cookie:", resultCookie);
+                  });
+                
                 sendSetPolicyRequest()
             })
         } else {
@@ -357,11 +383,11 @@ function onHeadersReceived(details) {
     }
 }
 
-// Skip proxy requires the Proxy-Authorization header to be set,
+// Proxy requires the Proxy-Authorization header to be set,
 // (if not it send back a Proxy-Authenticate header and triggers this function)
 // the header has to contain the path policy cookie that is aquired by the first request
 // and updated on setPolicy requests as there is no other way to pass the path policy into the
-// Skip proxy for HTTPS requests (aka encrypted)
+// Proxy for HTTPS requests (aka encrypted)
 function onAuthRequired(details) {
     console.log("<onAuthRequired>")
     console.log(details)
@@ -379,7 +405,7 @@ function onAuthRequired(details) {
     };
 }
 
-// Skip returns a valid redirect response, meaning there is SCION enabled
+// Proxy returns a valid redirect response, meaning there is SCION enabled
 // and we can do this request again
 function onBeforeRedirect(details) {
     if (details.redirectUrl && details.url.startsWith(`${proxyAddress}${proxyURLResolvePath}`)) {
@@ -435,7 +461,7 @@ const errorHTML = `
     </div>
 `;
 
-// Skip throws and error in CONNECT request if there is no available path
+// Proxy throws and error in CONNECT request if there is no available path
 function onErrorOccurred(details) {
     console.log("<onErrorOccurred> Error: ", details.error);
     console.log(details)
