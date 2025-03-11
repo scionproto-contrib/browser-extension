@@ -4,6 +4,11 @@
 // Copyright 2024 ETH Zurich, Ovgu
 'use strict';
 
+// Default proxy configuration values
+const DEFAULT_PROXY_SCHEME = 'https';
+const DEFAULT_PROXY_HOST = 'forward-proxy.scion';
+const DEFAULT_PROXY_PORT = '9443';
+
 const toggleGlobalStrict = document.getElementById('toggleGlobalStrict');
 const checkboxGlobalStrict = document.getElementById('checkboxGlobalStrict');
 const lineStrictMode = document.getElementById('lineStrictMode');
@@ -13,6 +18,9 @@ const toggleNewDomainStrictMode = document.getElementById('toggleNewDomainStrict
 const lineNewDomainStrictMode = document.getElementById('lineNewDomainStrictMode');
 const inputNewDomain = document.getElementById('inputNewDomain');
 const scionMode = document.getElementById('scionmode');
+const proxySchemeElement = document.getElementById('proxy-scheme');
+const proxyHostElement = document.getElementById('proxy-host');
+const proxyPortElement = document.getElementById('proxy-port');
 
 
 const tableSitePreferencesRow = ` 
@@ -222,3 +230,53 @@ checkBoxNewDomainStrictMode
             scionMode.innerHTML = 'when available';
         }
     });
+
+// Load saved settings
+document.addEventListener('DOMContentLoaded', function() {
+    chrome.storage.sync.get({
+      proxyScheme: 'https',
+      proxyHost: 'forward-proxy.scion',
+      proxyPort: '9443'
+    }, function(items) {
+      proxySchemeElement.value = items.proxyScheme;
+      proxyHostElement.value = items.proxyHost;
+      proxyPortElement.value = items.proxyPort;
+    });
+    
+    document.getElementById('save-proxy-settings').addEventListener('click', saveProxySettings);
+    document.getElementById('reset-proxy-defaults').addEventListener('click', resetProxyDefaults);
+});
+  
+function saveProxySettings() {
+    const scheme = proxySchemeElement.value;
+    const host = proxyHostElement.value;
+    const port = proxyPortElement.value;
+
+    // Basic validation
+    if (!host || !port) {
+        alert('Proxy host and port are required');
+        return;
+    }
+
+    chrome.storage.sync.set({
+        proxyScheme: scheme,
+        proxyHost: host,
+        proxyPort: port
+    }, function() {
+        // Show saved message
+        const saveButton = document.getElementById('save-proxy-settings');
+        const originalText = saveButton.textContent;
+        saveButton.textContent = 'Settings Saved!';
+        saveButton.disabled = true;
+        
+        setTimeout(function() {
+        saveButton.textContent = originalText;
+        saveButton.disabled = false;
+        }, 1500);
+    });
+}
+function resetProxyDefaults() {
+    proxySchemeElement.value = DEFAULT_PROXY_SCHEME;
+    proxyHostElement.value = DEFAULT_PROXY_HOST;
+    proxyPortElement.value = DEFAULT_PROXY_PORT;
+}
