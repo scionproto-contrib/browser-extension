@@ -103,17 +103,20 @@ function checkProxyStatus() {
     }).then(response => {
         if (response.status === 200) {
             proxyStatusMessage.textContent = "Proxy is connected";
+            proxyStatusMessage.innerHTML += " <span>&#x2705;</span> ";
             // Hide the help link when everything is working
             proxyHelpLink.classList.add('hidden');
         } else {
             // Show error message for non-200 responses
             proxyStatusMessage.textContent = `Proxy connection error: ${response.status}`;
+            proxyStatusMessage.innerHTML += " <span>#x274C;</span> ";
             showProxyHelpLink();
         }
     }).catch(error => {
         // Handle network errors or timeouts
         console.error("Proxy check failed:", error);
         proxyStatusMessage.textContent = "Failed to connect to proxy";
+        proxyStatusMessage.innerHTML += " <span>&#x274C;</span> ";
         showProxyHelpLink();
     });
 }
@@ -121,7 +124,7 @@ function checkProxyStatus() {
 
 function showProxyHelpLink() {
     proxyHelpLink.classList.remove('hidden');
-    proxyHelpLink.href = "https://scion-architecture.net/help/proxy-troubleshooting";
+    proxyHelpLink.href = "https://scion-browser-extension.readthedocs.io/en/latest/#requirements";
     
     proxyHelpLink.addEventListener('click', function(event) {
         event.preventDefault();
