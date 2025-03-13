@@ -5,6 +5,7 @@ const DEFAULT_PROXY_SCHEME = "https"
 const DEFAULT_PROXY_HOST = "forward-proxy.scion";
 const DEFAULT_PROXY_PORT = "9443";
 const proxyPathUsagePath = "/path-usage"
+const proxyHealthCheckPath = "/health"
 
 const toggleRunning = document.getElementById('toggleRunning');
 const checkboxRunning = document.getElementById('checkboxRunning');
@@ -15,8 +16,11 @@ const pathUsageContainer = document.getElementById("path-usage-container");
 const scionModePreference = document.getElementById('scionModePreference');
 const domainList = document.getElementById("domainlist");
 const scionsupport = document.getElementById("scionsupport");
+const proxyStatusMessage = document.getElementById('proxy-status-message');
+const proxyHelpLink = document.getElementById('proxy-help-link');
 
 let proxyAddress = `${DEFAULT_PROXY_SCHEME}://${DEFAULT_PROXY_HOST}:${DEFAULT_PROXY_PORT}`
+
 
 var perSiteStrictMode = {};
 var popupMainDomain = "";
@@ -57,6 +61,7 @@ window.onload = function () {
         proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
 
         updatePathUsage();
+        checkProxyStatus();
     });
     
 }
@@ -87,6 +92,42 @@ const updatePathUsage = () => {
     });
 
 };
+
+function checkProxyStatus() {
+    proxyStatusMessage.textContent = "Checking proxy status...";
+    proxyHelpLink.classList.add('hidden');
+    
+    fetch(`${proxyAddress}${proxyHealthCheckPath}`, {
+        method: "GET",
+        signal: AbortSignal.timeout(5000)
+    }).then(response => {
+        if (response.status === 200) {
+            proxyStatusMessage.textContent = "Proxy is connected";
+            // Hide the help link when everything is working
+            proxyHelpLink.classList.add('hidden');
+        } else {
+            // Show error message for non-200 responses
+            proxyStatusMessage.textContent = `Proxy connection error: ${response.status}`;
+            showProxyHelpLink();
+        }
+    }).catch(error => {
+        // Handle network errors or timeouts
+        console.error("Proxy check failed:", error);
+        proxyStatusMessage.textContent = "Failed to connect to proxy";
+        showProxyHelpLink();
+    });
+}
+
+
+function showProxyHelpLink() {
+    proxyHelpLink.classList.remove('hidden');
+    proxyHelpLink.href = "https://scion-architecture.net/help/proxy-troubleshooting";
+    
+    proxyHelpLink.addEventListener('click', function(event) {
+        event.preventDefault();
+        chrome.tabs.create({ url: this.href });
+    });
+}
 
 const newPathUsageChild = (pathUsage, index) => {
     // This is at the moment just for presentation purposes and needs to be
