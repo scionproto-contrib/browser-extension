@@ -1,10 +1,9 @@
 // Copyright 2024 ETH Zurich, Ovgu
 'use strict';
 
-const proxyScheme = "https"
-const proxyHost = "forward-proxy.scion";
-const proxyPort = "9443";
-const proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`
+const DEFAULT_PROXY_SCHEME = "https"
+const DEFAULT_PROXY_HOST = "forward-proxy.scion";
+const DEFAULT_PROXY_PORT = "9443";
 const proxyPathUsagePath = "/path-usage"
 
 const toggleRunning = document.getElementById('toggleRunning');
@@ -16,6 +15,8 @@ const pathUsageContainer = document.getElementById("path-usage-container");
 const scionModePreference = document.getElementById('scionModePreference');
 const domainList = document.getElementById("domainlist");
 const scionsupport = document.getElementById("scionsupport");
+
+let proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`
 
 var perSiteStrictMode = {};
 var popupMainDomain = "";
@@ -45,7 +46,19 @@ document.getElementById('button-options').addEventListener('click', function () 
 })();
 
 window.onload = function () {
-    updatePathUsage();
+    chrome.storage.sync.get({
+        proxyScheme: DEFAULT_PROXY_SCHEME,
+        proxyHost: DEFAULT_PROXY_HOST,
+        proxyPort: DEFAULT_PROXY_PORT
+      }, (items) => {
+        let proxyScheme = items.proxyScheme;
+        let proxyHost = items.proxyHost;
+        let proxyPort = items.proxyPort;
+        proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
+
+        updatePathUsage();
+    });
+    
 }
 
 const updatePathUsage = () => {
