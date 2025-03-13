@@ -16,7 +16,7 @@ const scionModePreference = document.getElementById('scionModePreference');
 const domainList = document.getElementById("domainlist");
 const scionsupport = document.getElementById("scionsupport");
 
-let proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`
+let proxyAddress = `${DEFAULT_PROXY_SCHEME}://${DEFAULT_PROXY_HOST}:${DEFAULT_PROXY_PORT}`
 
 var perSiteStrictMode = {};
 var popupMainDomain = "";
