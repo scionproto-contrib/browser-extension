@@ -1,10 +1,6 @@
 // Copyright 2024 ETH Zurich, Ovgu
 'use strict';
 
-const proxyScheme = "https"
-const proxyHost = "forward-proxy.scion";
-const proxyPort = "9443";
-const proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`
 
 const proxyHostResolvePath = "/resolve"
 const proxyHostResolveParam = "host"
@@ -12,6 +8,12 @@ const proxyURLResolvePath = "/redirect"
 const proxyURLResolveParam = "url"
 const proxyPolicyPath = "/policy"
 const proxyErrorPath = "/error"
+
+let proxyScheme = "https";
+let proxyHost = "forward-proxy.scion";
+let proxyPort = "9443";
+let proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
+
 
 /** Background State */
 let globalStrictMode = false;
@@ -56,26 +58,49 @@ getStorageValue('extension_running').then(extensionRunning => {
 
 /*--- PAC --------------------------------------------------------------------*/
 
+function loadProxySettings() {
+    chrome.storage.sync.get({
+      proxyScheme: "https",
+      proxyHost: "forward-proxy.scion",
+      proxyPort: "9443"
+    }, (items) => {
+      proxyScheme = items.proxyScheme;
+      proxyHost = items.proxyHost;
+      proxyPort = items.proxyPort;
+      proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
+      
+      // Update the PAC script with new settings
+      updateProxyConfiguration();
+    });
+  }
+
+// Load saved configuration at startup
+loadProxySettings();
+
 /* PAC configuration */
 // direct everything to the forward-proxy except if the target is the forward-proxy, then go direct
-var config = {
-    mode: "pac_script",
-    pacScript: {
+function updateProxyConfiguration() {
+    const config = {
+      mode: "pac_script",
+      pacScript: {
         data:
-            "function FindProxyForURL(url, host) {\n" +
-            `    if (isPlainHostName(host) || dnsDomainIs(host, "${proxyHost}")) {\n` +
-            `        return "DIRECT"\n` +
-            `    } else {\n` +
-            `       return '${proxyScheme === "https" ? "HTTPS" : "PROXY"} ${proxyHost}:${proxyPort}';\n` +
-            `    }\n` +
-            "}",
-    }
-};
-chrome.proxy.settings.set({ value: config, scope: 'regular' }, function () {
-    chrome.proxy.settings.get({}, function (config) {
+          "function FindProxyForURL(url, host) {\n" +
+          `    if (isPlainHostName(host) || dnsDomainIs(host, "${proxyHost}")) {\n` +
+          `        return "DIRECT"\n` +
+          `    } else {\n` +
+          `       return '${proxyScheme === "https" ? "HTTPS" : "PROXY"} ${proxyHost}:${proxyPort}';\n` +
+          `    }\n` +
+          "}",
+      }
+    };
+    
+    chrome.proxy.settings.set({ value: config, scope: 'regular' }, function() {
+      console.log("Proxy configuration updated");
+      chrome.proxy.settings.get({}, function(config) {
         console.log(config);
+      });
     });
-});
+  }
 
 /*--- storage ----------------------------------------------------------------*/
 
@@ -92,7 +117,15 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
         globalStrictMode = changes.globalStrictMode?.newValue;
     } else if (namespace == 'sync' && changes.isd_all?.newValue !== undefined) {
         allowAllgeofence(changes.isd_all.newValue);
-    }
+    } else if (namespace === 'sync' && 
+        (changes.proxyScheme || changes.proxyHost || changes.proxyPort)) {
+       // Reload all proxy settings if any changed
+       loadProxySettings();
+
+       knownSCION = {};
+       knownNonSCION = {};
+       policyCookie = null;
+     }
 })
 
 // Changes icon depending on the extension is running or not
