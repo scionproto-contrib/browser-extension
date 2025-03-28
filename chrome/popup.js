@@ -124,7 +124,7 @@ function checkProxyStatus() {
 
 function showProxyHelpLink() {
     proxyHelpLink.classList.remove('hidden');
-    proxyHelpLink.href = "https://scion-browser-extension.readthedocs.io/en/latest/#requirements";
+    proxyHelpLink.href = chrome.runtime.getURL('proxy-help.html');
     
     proxyHelpLink.addEventListener('click', function(event) {
         event.preventDefault();
