@@ -24,6 +24,9 @@
           "32": "/images/scion-38.jpg"
       }
   },
+  "web_accessible_resources": [
+    "proxy-help.html"
+  ],
   "options_page": "options.html",
   "background": {
       "scripts": [
@@ -41,4 +44,5 @@
       "48": "/images/scion-2.png",
       "128": "/images/scion-3.png"
   }
+
 }

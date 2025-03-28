@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCION Browser Extension - Proxy Help</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #2c5282;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #2b6cb0;
+            margin-top: 30px;
+        }
+        .troubleshooting-step {
+            background-color: #f7fafc;
+            border-left: 4px solid #4299e1;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        code {
+            background-color: #edf2f7;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .note {
+            background-color: #ebf8ff;
+            border-left: 4px solid #3182ce;
+            padding: 10px 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .header-logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .header-logo img {
+            height: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-logo">
+        <img src="images/scion-0.png" alt="SCION Logo">
+        <h1>SCION Browser Extension - Proxy Help</h1>
+    </div>
+
+    <p>The SCION Browser Extension requires a running SCION proxy to function correctly. This page will help you troubleshoot common connection issues.</p>
+
+    <h2>Connection Requirements</h2>
+    <p>To use the SCION Browser Extension, you need:</p>
+    <ol>
+        <li>A running SCION Forward proxy service</li>
+        <li>Proper proxy configuration in the extension settings</li>
+    </ol>
+
+    <h2>Troubleshooting Steps</h2>
+    
+    <div class="troubleshooting-step">
+        <h3>1. Check if the SCION Proxy is Running</h3>
+        <p>The SCION proxy service needs to be running on your machine or network. By default, the extension looks for the proxy at:</p>
+        <p><code>https://forward-proxy.scion:9443</code></p>
+        <p>Make sure the proxy service is active and accessible at this address. </p>
+        <p>If you are running a local instance of the SCION forward proxy, by default it will add the following entry on the  "/etc/hosts" file :</p>
+        <p><code>127.0.0.1 forward-proxy.scion</code></p>
+        <p>If you are within an enterprise or an institutional network, please contact your network administrator.</p>
+
+    </div>
+
+    <div class="troubleshooting-step">
+        <h3>2. Verify Your Proxy Settings</h3>
+        <p>If you've configured a custom proxy address:</p>
+        <ol>
+            <li>Click on the extension options button</li>
+            <li>Verify that your proxy settings are correct</li>
+            <li>Default values are: 
+                <ul>
+                    <li>Scheme: <code>https</code></li>
+                    <li>Host: <code>forward-proxy.scion</code></li>
+                    <li>Port: <code>9443</code></li>
+                </ul>
+            </li>
+        </ol>
+    </div>
+
+    <div class="troubleshooting-step">
+        <h3>3. Check Network and Firewall Settings</h3>
+        <p>Make sure your network and firewall settings allow connections to the proxy:</p>
+        <ul>
+            <li>Verify that port 9443 (or your custom port) is open</li>
+            <li>Check if any network security software is blocking the connection</li>
+            <li>If using a custom hostname, ensure it resolves correctly</li>
+        </ul>
+    </div>
+
+    <div class="troubleshooting-step">
+        <h3>4. Restart the SCION Proxy Service</h3>
+        <p>In case you are running the SCION forward proxy locally: </p>
+        <ol>
+            <li>Check the status of the local forward proxy. If you are running it as a Linux systemd service, you can check "systemctl status scion-caddy-forward-proxy.service" (or the service name you have configured)</li>
+            <li>Check for errors on the configuration file which are a typical source of issues</li>
+            <li>Stop any running instances. If you are running it as a Linux systemd service, you can check "systemctl stop scion-caddy-forward-proxy.service" (or the service name you have configured)</li>
+            <li>Restart the proxy service. If you are running it as a Linux systemd service, you can check "systemctl restart scion-caddy-forward-proxy.service" (or the service name you have configured)</li>
+        </ol>
+    </div>
+
+    <div class="note">
+        <p><strong>Note:</strong> For more detailed information about the SCION Browser Extension requirements and setup, please refer to the <a href="https://scion-browser-extension.readthedocs.io/en/latest/#requirements" target="_blank">official documentation</a>. Open this link after disabling the extension or in an incognito window for proper access.</p>
+    </div>
+
+    <h2>Still Having Issues?</h2>
+    <p>If you're still experiencing problems connecting to the SCION proxy:</p>
+    <ul>
+        <li>Check the browser console for any error messages</li>
+        <li>Review the proxy service logs for errors</li>
+        <li>Visit our <a href="https://github.com/netsec-ethz/scion-browser-extensions/issues" target="_blank">GitHub Issues page</a> to report the problem or see if others are experiencing similar issues. Open this link after disabling the extension or in an incognito window for proper access.</li>
+    </ul>
+</body>
+</html>
