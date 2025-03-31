@@ -261,7 +261,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     chrome.storage.sync.get({
-        autoProxyConfig: false
+        autoProxyConfig: true
     }, function(items) {
         document.getElementById('auto-proxy-config').checked = items.autoProxyConfig;
         updateProxyFormState(items.autoProxyConfig);
