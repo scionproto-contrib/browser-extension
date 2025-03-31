@@ -99,7 +99,7 @@ function checkProxyStatus() {
     
     fetch(`${proxyAddress}${proxyHealthCheckPath}`, {
         method: "GET",
-        signal: AbortSignal.timeout(5000)
+        signal: AbortSignal.timeout(2000)
     }).then(response => {
         if (response.status === 200) {
             proxyStatusMessage.textContent = "Proxy is connected";

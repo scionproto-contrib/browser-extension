@@ -231,6 +231,23 @@ checkBoxNewDomainStrictMode
         }
     });
 
+function updateProxyFormState(isAutoConfig) {
+    const manualControls = document.querySelectorAll('#manual-proxy-settings input, #manual-proxy-settings select, #manual-proxy-settings button, #reset-proxy-defaults');
+    
+    manualControls.forEach(element => {
+      element.disabled = isAutoConfig;
+      if (isAutoConfig) {
+        element.classList.add('opacity-50', 'cursor-not-allowed');
+      } else {
+        element.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+    });
+    
+    if (isAutoConfig) {
+      chrome.runtime.sendMessage({ action: "fetchAndApplyScionPAC" });
+    }
+}
+
 // Load saved settings
 document.addEventListener('DOMContentLoaded', function() {
     chrome.storage.sync.get({
@@ -242,9 +259,18 @@ document.addEventListener('DOMContentLoaded', function() {
       proxyHostElement.value = items.proxyHost;
       proxyPortElement.value = items.proxyPort;
     });
+
+    chrome.storage.sync.get({
+        autoProxyConfig: false
+    }, function(items) {
+        document.getElementById('auto-proxy-config').checked = items.autoProxyConfig;
+        updateProxyFormState(items.autoProxyConfig);
+    });
     
     document.getElementById('save-proxy-settings').addEventListener('click', saveProxySettings);
     document.getElementById('reset-proxy-defaults').addEventListener('click', resetProxyDefaults);
+    document.getElementById('auto-proxy-config').addEventListener('change', saveAutoProxyConfig);
+
 });
   
 function saveProxySettings() {
@@ -280,3 +306,13 @@ function resetProxyDefaults() {
     proxyHostElement.value = DEFAULT_PROXY_HOST;
     proxyPortElement.value = DEFAULT_PROXY_PORT;
 }
+
+function saveAutoProxyConfig() {
+    const autoConfig = document.getElementById('auto-proxy-config').checked;
+    
+    chrome.storage.sync.set({
+      autoProxyConfig: autoConfig
+    }, function() {
+      updateProxyFormState(autoConfig);
+    });
+  }

@@ -1,6 +1,9 @@
 // Copyright 2024 ETH Zurich, Ovgu
 'use strict';
 
+const DEFAULT_PROXY_SCHEME = "https"
+const DEFAULT_PROXY_HOST = "forward-proxy.scion";
+const DEFAULT_PROXY_PORT = "9443";
 
 const proxyHostResolvePath = "/resolve"
 const proxyHostResolveParam = "host"
@@ -8,10 +11,11 @@ const proxyURLResolvePath = "/redirect"
 const proxyURLResolveParam = "url"
 const proxyPolicyPath = "/policy"
 const proxyErrorPath = "/error"
+const proxyHealthCheckPath = "/health"
 
-let proxyScheme = "https";
-let proxyHost = "forward-proxy.scion";
-let proxyPort = "9443";
+let proxyScheme = DEFAULT_PROXY_SCHEME;
+let proxyHost =  DEFAULT_PROXY_HOST;
+let proxyPort = DEFAULT_PROXY_PORT;
 let proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
 
 
@@ -58,26 +62,132 @@ getStorageValue('extension_running').then(extensionRunning => {
 
 /*--- PAC --------------------------------------------------------------------*/
 
+// Load saved configuration at startup
+chrome.storage.sync.get({ autoProxyConfig: false }, ({ autoProxyConfig }) => {
+    if (autoProxyConfig) {
+        fetchAndApplyScionPAC();
+    } else {
+        loadProxySettings();
+    }
+});
+
 function loadProxySettings() {
     chrome.storage.sync.get({
-      proxyScheme: "https",
-      proxyHost: "forward-proxy.scion",
-      proxyPort: "9443"
+      proxyScheme: DEFAULT_PROXY_SCHEME,
+      proxyHost: DEFAULT_PROXY_HOST,
+      proxyPort: DEFAULT_PROXY_PORT
     }, (items) => {
       proxyScheme = items.proxyScheme;
       proxyHost = items.proxyHost;
       proxyPort = items.proxyPort;
       proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
       
-      // Update the PAC script with new settings
       updateProxyConfiguration();
     });
-  }
+}
 
-// Load saved configuration at startup
-loadProxySettings();
+function parseProxyFromPAC(pacScript) {
+    const httpsProxyMatch = pacScript.match(/HTTPS\s+([^:]+):(\d+)/i);
+    const httpProxyMatch = pacScript.match(/PROXY\s+([^:]+):(\d+)/i);
+    
+    if (httpsProxyMatch) {
+      return {
+        proxyScheme: "https",
+        proxyHost: httpsProxyMatch[1],
+        proxyPort: httpsProxyMatch[2]
+      };
+    } else if (httpProxyMatch) {
+      return {
+        proxyScheme: "http",
+        proxyHost: httpProxyMatch[1],
+        proxyPort: httpProxyMatch[2]
+      };
+    }
+    
+    return null;
+}
+  
+function fetchAndApplyScionPAC() {
+    fetch(`http://wpad/wpad_scion.dat`)
+    .then(response => {
+        if (!response.ok) {
+          throw new Error(`Retrieving PAC config; status: ${response.status}`);
+        }
+        return response.text();
+      })
+      .then(pacScript => {
+        const proxyConfig = parseProxyFromPAC(pacScript);
+        
+        if (proxyConfig) {
+          proxyScheme = proxyConfig.proxyScheme;
+          proxyHost = proxyConfig.proxyHost;
+          proxyPort = proxyConfig.proxyPort;
+          proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
+          
+          console.log("Detected proxy configuration:", proxyAddress);
 
-/* PAC configuration */
+          if (!checkProxyHealth(proxyAddress)) {
+            throw new Error("Proxy health check failed");
+          }
+
+          const config = {
+            mode: "pac_script",
+            pacScript: {
+              data: pacScript
+            }
+          };
+          
+          chrome.proxy.settings.set({ value: config, scope: 'regular' }, function() {
+            console.log("SCION PAC configuration applied");
+          });
+        } else{
+            throw new Error("Failed to parse PAC script");
+        }
+        
+      })
+      .catch(error => {
+        console.warn("Error on WPAD process, falling back to default:", error);
+        fallbackToDefaults();
+      });
+}
+
+function checkProxyHealth(proxyAddressToCheck) {
+    const proxyUrl = `${proxyAddressToCheck}${proxyHealthCheckPath}`;
+    fetch(proxyUrl, {
+        method: "GET",
+        signal: AbortSignal.timeout(2000)
+    }).then(response => {
+        if (response.status === 200) {
+            console.log(`Proxy ${proxyAddressToCheck} is healthy`);
+            return true;
+        } else {
+            console.warn(`Proxy ${proxyAddressToCheck} is not healthy, status code: ${response.status}`);
+            return false;
+        }
+    }).catch(error => {
+        console.warn(`Error checking proxy ${proxyAddressToCheck} health:`, error);
+        return false;
+    });
+}
+
+function fallbackToDefaults() {
+    proxyScheme = DEFAULT_PROXY_SCHEME;
+    proxyHost = DEFAULT_PROXY_HOST;
+    proxyPort =  DEFAULT_PROXY_PORT;
+    proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
+    
+    chrome.storage.sync.set({
+        proxyScheme: proxyScheme,
+        proxyHost: proxyHost,
+        proxyPort: proxyPort
+    }, function() {
+        console.log("Falling back to default proxy configuration:", proxyAddress);
+    });
+    
+    updateProxyConfiguration();
+}
+
+
 // direct everything to the forward-proxy except if the target is the forward-proxy, then go direct
 function updateProxyConfiguration() {
     const config = {
@@ -101,6 +211,13 @@ function updateProxyConfiguration() {
       });
     });
   }
+
+chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+    if (request.action === "fetchAndApplyScionPAC") {
+      fetchAndApplyScionPAC();
+      return true;
+    }
+ });
 
 /*--- storage ----------------------------------------------------------------*/
 
