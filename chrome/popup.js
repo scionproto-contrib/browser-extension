@@ -250,12 +250,10 @@ function toggleExtensionRunning() {
 
     if (toggleRunning.checked) {
         mainDomain.innerHTML = "SCION preference for " + popupMainDomain;
-        toggleRunning.classList.remove("halfchecked");
         lineRunning.style.backgroundColor = "#48bb78";
         scionmode.innerHTML = "Strict";
     } else {
         mainDomain.innerHTML = "SCION preference for " + popupMainDomain;
-        toggleRunning.classList.add("halfchecked");
         lineRunning.style.backgroundColor = "#cccccc";
         scionmode.innerHTML = "When available";
     }

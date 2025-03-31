@@ -1,0 +1,218 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== BASE STYLES ===== */
+body {
+  background: rgb(248, 247, 250);
+  background: linear-gradient(
+    90deg, 
+    rgba(248, 247, 250, 1) 0%, 
+    rgba(230, 230, 238, 1) 35%, 
+    rgba(228, 240, 242, 1) 100%
+  );
+}
+
+h3 {
+  min-width: 300px;
+  text-align: center;
+}
+
+/* ===== TOGGLE SWITCHES ===== */
+/* Base dot positioning */
+input ~ .dot {
+  transform: translateX(0%);
+}
+
+/* Half-checked state */
+/* input.halfchecked ~ .dot {
+  transform: translateX(180%) !important;
+} */
+
+/* Checked state */
+input:checked ~ .dot {
+  transform: translateX(100%);
+}
+
+input:checked ~ .dot2 {
+  transform: translateX(100%);
+}
+
+/* ===== ACCORDION STYLES ===== */
+/* Accordion label */
+.ac-label {
+  position: relative;
+  padding: 0.5em 1em 0.5em 2.5em;
+  margin-bottom: 0.5em;
+  display: block;
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out;
+}
+
+/* Hide accordion inputs */
+.ac-input {
+  display: none;
+}
+
+/* Main accordion label modification */
+#ac-label-main {
+  padding-left: 0.5em !important;
+}
+
+#ac-label-main:after {
+  width: 0px !important;
+  content: unset !important;
+}
+
+/* Accordion content area */
+.ac-text,
+.ac-sub-text {
+  opacity: 0;
+  height: 0;
+  margin-bottom: 0.5em;
+  transition: opacity 0.5s ease-in-out;
+  overflow: hidden;
+}
+
+/* Show content when checked */
+.ac-input:checked ~ .ac-text,
+.ac-sub .ac-input:checked ~ .ac-sub-text {
+  opacity: 1;
+  height: auto;
+}
+
+/* Plus/minus indicators */
+.ac-label:after,
+.ac-input:checked + .ac-label:after {
+  content: "+";
+  position: absolute;
+  left: 0;
+  top: -4px;
+  width: 2em;
+  height: 100%;
+  line-height: 2.25em;
+  text-align: center;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.ac-input:checked + .ac-label:after {
+  content: "-";
+}
+
+/* Sub accordion styles */
+.ac-sub .ac-label {
+  background: none;
+  font-weight: 600;
+  padding: 0.1em 2em;
+  font-size: 14px;
+  margin-bottom: 0;
+}
+
+.ac-sub .ac-label:checked {
+  background: none;
+  border-bottom: 1px solid whitesmoke;
+}
+
+.ac-sub .ac-label:after,
+.ac-sub .ac-input:checked + .ac-label:after {
+  left: 0;
+  background: none;
+}
+
+.ac-sub .ac-input:checked + label,
+.ac-sub .ac-label:hover {
+  background: none;
+}
+
+.ac-sub-text {
+  padding: 0 1em 0 2em;
+}
+
+/* ===== FLAG CONTAINER ===== */
+.flag-container {
+  max-width: 200px;
+  height: 50px;
+  margin: 0 auto;
+  display: flex;
+  gap: 2px;
+}
+
+.flag-container img {
+  width: 100%;
+  height: 50%;
+}
+
+.flag-container .description {
+  text-align: center;
+}
+
+/* ===== TAB COMPONENT ===== */
+/* Tab content - closed */
+.tab-content {
+  max-height: 0;
+  transition: max-height 0.35s;
+}
+
+/* :checked - resize to full height */
+.tab input:checked ~ .tab-content {
+  max-height: 100vh;
+}
+
+/* Tab labels */
+.tab input + label {
+  font-size: 18px;
+  padding: 0.5rem;
+}
+
+/* Label formatting when open */
+.tab input:checked + label {
+  font-size: 18px;
+  padding: 0.5rem;
+  border-left-width: 2px;
+  border-color: #6574cd;
+  color: #6574cd;
+}
+
+/* Icon */
+.tab label::after {
+  float: right;
+  right: 0;
+  top: 0;
+  display: block;
+  width: 1.5em;
+  height: 1.5em;
+  line-height: 1.5;
+  font-size: 1.25rem;
+  text-align: center;
+  transition: all 0.35s;
+}
+
+/* Icon formatting - closed */
+.tab input[type=checkbox] + label::after {
+  content: "+";
+  font-weight: bold;
+  border-width: 1px;
+  border-radius: 9999px;
+  border-color: #b8c2cc;
+}
+
+.tab input[type=radio] + label::after {
+  content: "\25BE";
+  font-weight: bold;
+  border-width: 1px;
+  border-radius: 9999px;
+  border-color: #b8c2cc;
+}
+
+/* Icon formatting - open */
+.tab input[type=checkbox]:checked + label::after {
+  transform: rotate(315deg);
+  background-color: #6574cd;
+  color: #f8fafc;
+}
+
+.tab input[type=radio]:checked + label::after {
+  transform: rotateX(180deg);
+  background-color: #6574cd;
+  color: #f8fafc;
+}

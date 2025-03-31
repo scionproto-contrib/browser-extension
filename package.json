@@ -1,0 +1,27 @@
+{
+  "name": "browser-extension",
+  "version": "1.0.0",
+  "description": "This is an experimental version of the chromium-based SCION Browser Extension, that can be used to interact with the [SCION Forward Proxy](https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html).",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+"scripts": {
+  "build:css": "tailwindcss -i src/css/tailwind.css -o chrome/css/tailwind.min.css --minify",
+  "watch:css": "tailwindcss -i src/css/tailwind.css -o chrome/css/tailwind.min.css --watch"
+},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scionproto-contrib/browser-extension.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/scionproto-contrib/browser-extension/issues"
+  },
+  "homepage": "https://github.com/scionproto-contrib/browser-extension#readme",
+  "devDependencies": {
+    "tailwindcss": "^2.2.19"
+  }
+}
