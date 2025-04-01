@@ -86,6 +86,8 @@ function loadProxySettings() {
     });
 }
 
+// TODO: we assume correct formate from the server. We may want to
+// validate the PAC script, here.
 function parseProxyFromPAC(pacScript) {
     const httpsProxyMatch = pacScript.match(/HTTPS\s+([^:]+):(\d+)/i);
     const httpProxyMatch = pacScript.match(/PROXY\s+([^:]+):(\d+)/i);
@@ -127,6 +129,8 @@ function fetchAndApplyScionPAC() {
           console.log("Detected proxy configuration:", proxyAddress);
 
           if (!checkProxyHealth(proxyAddress)) {
+            // The error handling takes care of updating the proxy variables
+            // and falling back to defaults
             throw new Error("Proxy health check failed");
           }
 
@@ -138,7 +142,7 @@ function fetchAndApplyScionPAC() {
           };
           
           chrome.proxy.settings.set({ value: config, scope: 'regular' }, function() {
-            console.log("SCION PAC configuration applied");
+            console.log("SCION PAC configuration from WPAD applied");
           });
         } else{
             throw new Error("Failed to parse PAC script");
