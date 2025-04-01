@@ -50,9 +50,16 @@
     <hr />
 
     <div class="flex p-1 shadow-sm">
-        <article id="proxy-check-container" class="text-sm">
-            <span id="proxy-status-message">Checking proxy status...</span>
-            <a id="proxy-help-link" href="#" class="text-blue-600 hover:text-blue-800 ml-2 hidden">Need help?</a>
+        <article id="proxy-check-container" class="text-sm w-full">
+            <div class="ac">
+                <input class="ac-input" id="proxy-status-toggle" name="proxy-status-toggle" type="checkbox" />
+                <label for="proxy-status-toggle" class="ac-label flex items-center" id="proxy-status-label">
+                    <span id="proxy-status-message">Checking proxy status...</span>
+                    <a id="proxy-help-link" href="#" class="text-blue-600 hover:text-blue-800 ml-2 hidden">Need help?</a>
+                </label>
+                <article class="ac-text" id="proxy-details-content">
+                </article>
+            </div>
         </article>
     </div>
 
