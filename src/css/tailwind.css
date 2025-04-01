@@ -216,3 +216,39 @@ input:checked ~ .dot2 {
   background-color: #6574cd;
   color: #f8fafc;
 }
+
+/* ===== PROXY DETAILS STYLES ===== */
+#proxy-status-label {
+  padding-left: 0.5em !important;
+}
+
+#proxy-status-label:after {
+  width: 0px !important;
+  content: unset !important;
+}
+
+/* Add a small indicator to show it's expandable */
+#proxy-status-message {
+  position: relative;
+  cursor: pointer;
+}
+
+#proxy-status-message::before {
+  content: "\25BC"; /* Black down-pointing triangle */
+  font-size: 8px;
+  color: #718096;
+  margin-left: 4px;
+  vertical-align: middle;
+  display: inline-block;
+}
+
+#proxy-status-toggle:checked ~ .ac-label #proxy-status-message::before {
+  content: "\25B2"; /* Black up-pointing triangle */
+}
+
+#proxy-details-content {
+  font-size: 0.75rem; 
+  color: #718096; 
+  padding-left: 1rem; 
+  line-height: 1.2;
+}

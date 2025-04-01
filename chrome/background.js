@@ -121,18 +121,20 @@ function fetchAndApplyScionPAC() {
         const proxyConfig = parseProxyFromPAC(pacScript);
         
         if (proxyConfig) {
+         // As long as we can parse the PAC script, we assume it is correct,
+         // i.e., we don't check the proxy health here.
           proxyScheme = proxyConfig.proxyScheme;
           proxyHost = proxyConfig.proxyHost;
           proxyPort = proxyConfig.proxyPort;
           proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
-          
-          console.log("Detected proxy configuration:", proxyAddress);
 
-          if (!checkProxyHealth(proxyAddress)) {
-            // The error handling takes care of updating the proxy variables
-            // and falling back to defaults
-            throw new Error("Proxy health check failed");
-          }
+          chrome.storage.sync.set({
+                proxyScheme: proxyScheme,
+                proxyHost: proxyHost,
+                proxyPort: proxyPort
+            }, function() {
+                console.log("Detected proxy configuration:", proxyAddress);
+            });
 
           const config = {
             mode: "pac_script",
@@ -153,25 +155,6 @@ function fetchAndApplyScionPAC() {
         console.warn("Error on WPAD process, falling back to default:", error);
         fallbackToDefaults();
       });
-}
-
-function checkProxyHealth(proxyAddressToCheck) {
-    const proxyUrl = `${proxyAddressToCheck}${proxyHealthCheckPath}`;
-    fetch(proxyUrl, {
-        method: "GET",
-        signal: AbortSignal.timeout(2000)
-    }).then(response => {
-        if (response.status === 200) {
-            console.log(`Proxy ${proxyAddressToCheck} is healthy`);
-            return true;
-        } else {
-            console.warn(`Proxy ${proxyAddressToCheck} is not healthy, status code: ${response.status}`);
-            return false;
-        }
-    }).catch(error => {
-        console.warn(`Error checking proxy ${proxyAddressToCheck} health:`, error);
-        return false;
-    });
 }
 
 function fallbackToDefaults() {

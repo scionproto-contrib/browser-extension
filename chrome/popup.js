@@ -102,22 +102,29 @@ function checkProxyStatus() {
         signal: AbortSignal.timeout(2000)
     }).then(response => {
         if (response.status === 200) {
-            proxyStatusMessage.textContent = "Proxy is connected";
+            proxyStatusMessage.textContent = "Connected to proxy";
             proxyStatusMessage.innerHTML += " <span>&#x2705;</span> ";
+            const proxyDetailsContent = document.getElementById('proxy-details-content');
+            proxyDetailsContent.textContent = `Proxy at ${proxyAddress}`;
             // Hide the help link when everything is working
             proxyHelpLink.classList.add('hidden');
         } else {
             // Show error message for non-200 responses
-            proxyStatusMessage.textContent = `Proxy connection error: ${response.status}`;
+            console.error("Proxy check failed:", response.status);
+            proxyStatusMessage.textContent = `Failed to connect to proxy`;
             proxyStatusMessage.innerHTML += " <span>#x274C;</span> ";
+            const proxyDetailsContent = document.getElementById('proxy-details-content');
+            proxyDetailsContent.textContent = `Proxy at ${proxyAddress}`;
             showProxyHelpLink();
         }
     }).catch(error => {
         // Handle network errors or timeouts
         console.error("Proxy check failed:", error);
-        proxyStatusMessage.textContent = "Failed to connect to proxy";
+        proxyStatusMessage.textContent = `Failed to connect to proxy`;
         proxyStatusMessage.innerHTML += " <span>&#x274C;</span> ";
         showProxyHelpLink();
+        const proxyDetailsContent = document.getElementById('proxy-details-content');
+        proxyDetailsContent.textContent = `Proxy at ${proxyAddress}`;
     });
 }
 
