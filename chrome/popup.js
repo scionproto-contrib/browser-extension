@@ -110,8 +110,8 @@ function checkProxyStatus() {
             proxyHelpLink.classList.add('hidden');
         } else {
             // Show error message for non-200 responses
-            console.error("Proxy check failed:", response.status);
-            proxyStatusMessage.textContent = `Failed to connect to proxy`;
+            console.warn("Proxy check failed:", response.status);
+            proxyStatusMessage.textContent = "Failed to connect to proxy";
             proxyStatusMessage.innerHTML += " <span>#x274C;</span> ";
             const proxyDetailsContent = document.getElementById('proxy-details-content');
             proxyDetailsContent.textContent = `Proxy at ${proxyAddress}`;
@@ -119,8 +119,8 @@ function checkProxyStatus() {
         }
     }).catch(error => {
         // Handle network errors or timeouts
-        console.error("Proxy check failed:", error);
-        proxyStatusMessage.textContent = `Failed to connect to proxy`;
+        console.warn("Proxy check failed:", error);
+        proxyStatusMessage.textContent = "Failed to connect to proxy";
         proxyStatusMessage.innerHTML += " <span>&#x274C;</span> ";
         showProxyHelpLink();
         const proxyDetailsContent = document.getElementById('proxy-details-content');
