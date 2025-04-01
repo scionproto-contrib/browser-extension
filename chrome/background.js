@@ -63,7 +63,7 @@ getStorageValue('extension_running').then(extensionRunning => {
 /*--- PAC --------------------------------------------------------------------*/
 
 // Load saved configuration at startup
-chrome.storage.sync.get({ autoProxyConfig: false }, ({ autoProxyConfig }) => {
+chrome.storage.sync.get({ autoProxyConfig: true }, ({ autoProxyConfig }) => {
     if (autoProxyConfig) {
         fetchAndApplyScionPAC();
     } else {
