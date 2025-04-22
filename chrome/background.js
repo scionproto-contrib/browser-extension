@@ -86,27 +86,42 @@ function loadProxySettings() {
     });
 }
 
-// TODO: we assume correct formate from the server. We may want to
-// validate the PAC script, here.
+
 function parseProxyFromPAC(pacScript) {
+    // We look for the first HTTPS definition, if not found, we look for the first HTTP definition.
     const httpsProxyMatch = pacScript.match(/HTTPS\s+([^:]+):(\d+)/i);
     const httpProxyMatch = pacScript.match(/PROXY\s+([^:]+):(\d+)/i);
     
     if (httpsProxyMatch) {
+        if (!isValidPort(httpsProxyMatch[2])) {
+            console.warn("Invalid port number in PAC script");
+            return null;
+        }
       return {
         proxyScheme: "https",
         proxyHost: httpsProxyMatch[1],
         proxyPort: httpsProxyMatch[2]
       };
     } else if (httpProxyMatch) {
+        if (!isValidPort(httpProxyMatch[2])) {
+            console.warn("Invalid port number in PAC script");
+            return null;
+        }
       return {
         proxyScheme: "http",
         proxyHost: httpProxyMatch[1],
         proxyPort: httpProxyMatch[2]
       };
+    } else {
+      console.warn("No valid proxy configuration found in PAC script");
     }
     
     return null;
+}
+
+function isValidPort(port) {
+    const portNum = parseInt(port, 10);
+    return !isNaN(portNum) && portNum > 0 && portNum <= 65535;
 }
   
 function fetchAndApplyScionPAC() {
