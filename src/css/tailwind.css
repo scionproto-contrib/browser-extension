@@ -38,6 +38,21 @@ input:checked ~ .dot2 {
   transform: translateX(100%);
 }
 
+.tab-content .w-8.h-3.bg-gray-400,
+.isd-entry ~ .w-8.h-3.bg-gray-400 {
+  @apply bg-gray-300; /* Default toggle state color */
+}
+
+.tab-content input:checked ~ .w-8.h-3.bg-gray-400,
+.isd-entry:checked ~ .w-8.h-3.bg-gray-400 {
+  @apply bg-green-400; /* Checked  toggle state color */
+}
+
+.tab-content input:checked ~ .dot,
+.isd-entry:checked ~ .dot {
+  @apply bg-green-600; /* Dot color when checked */
+}
+
 /* ===== ACCORDION STYLES ===== */
 /* Accordion label */
 .ac-label {
