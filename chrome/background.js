@@ -10,7 +10,6 @@ const proxyHostResolveParam = "host"
 const proxyURLResolvePath = "/redirect"
 const proxyURLResolveParam = "url"
 const proxyPolicyPath = "/policy"
-const proxyErrorPath = "/error"
 const proxyHealthCheckPath = "/health"
 
 let proxyScheme = DEFAULT_PROXY_SCHEME;
@@ -564,103 +563,5 @@ function onBeforeRedirect(details) {
         console.log("<onBeforeRedirect> known scion (after resolve): ", details.redirectUrl)
         const url = new URL(details.redirectUrl);
         knownSCION[url.hostname] = true;
-    }
-}
-
-const errorHTML = `
-<html>
-<head>
-    <title>Error Page</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f2f2f2;
-        }
-        .error-banner {
-            background-color: #007BFF;
-            color: #fff;
-            padding: 10px;
-            text-align: center;
-            font-size: 40px;
-        }
-        .error-message {
-            background-color: #fff;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-            margin: 20px;
-            padding: 20px;
-            text-align: center;
-            font-size: 28px;
-        }
-        .details-section {
-          background-color: #fff;
-          border: 1px solid #ccc;
-          border-radius: 5px;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-          margin: 20px;
-          padding: 20px;
-          text-align: center;
-          font-size: 20px;
-      }
-    </style>
-</head>
-<body>
-    <div class="error-banner">
-      The SCION extension is unable to load the website
-    </div>
-`;
-
-// Proxy throws and error in CONNECT request if there is no available path
-function onErrorOccurred(details) {
-    console.log("<onErrorOccurred> Error: ", details.error);
-    console.log(details)
-
-    let tabId = details.tabId;
-    // TODO this results in an inifite recursion in case during the fetch another error happens
-    if (false && details.documentLifecycle === "active" && details.error === "net::ERR_TUNNEL_CONNECTION_FAILED") {
-        console.log("resolve URL on error: ", details.url)
-        fetch(`${proxyAddress}${proxyErrorPath}?${proxyURLResolveParam}=${details.url}`, {
-            method: "GET"
-        }).then(response => {
-
-            if (response.status === 200) {
-                console.warn("Resolution success");
-                response.text().then(customErrorMessage => {
-
-                    let trimmedMessage = customErrorMessage.replace("INTERNAL_ERROR (local): ", "");
-
-
-                    const updatedErrorHTML = errorHTML + `
-          <div class="error-message" id="custom-error">
-            ${trimmedMessage} (Destination AS for ${details.url}).
-               <div class="details-section" id="details">
-              Please check your Geofencing settings or contact your IT service desk.
-              </div>
-          </div>
-          </body>
-          </html>
-          `
-
-                    // Store the updated HTML content in a data URL
-                    const blob = new Blob([updatedErrorHTML], { type: 'text/html' });
-                    const localErrorURL = URL.createObjectURL(blob);
-                    chrome.tabs.create({ url: localErrorURL });
-                });
-            } else {
-                console.warn("Resolution error");
-                chrome.tabs.update(
-                    tabId,
-                    { url: chrome.runtime.getURL("error.html") });
-            }
-        }).catch((e) => {
-            console.warn("Resolution failed");
-            console.error(e);
-            chrome.tabs.update(
-                tabId,
-                { url: chrome.runtime.getURL("error.html") });
-        });
     }
 }
