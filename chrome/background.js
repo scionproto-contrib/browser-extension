@@ -1,9 +1,11 @@
 // Copyright 2024 ETH Zurich, Ovgu
 'use strict';
 
-const DEFAULT_PROXY_SCHEME = "https"
+const HTTPS_PROXY_SCHEME = "https"
+const HTTP_PROXY_SCHEME = "http"
 const DEFAULT_PROXY_HOST = "forward-proxy.scion";
-const DEFAULT_PROXY_PORT = "9443";
+const HTTPS_PROXY_PORT = "9443";
+const HTTP_PROXY_PORT = "9080";
 
 const proxyHostResolvePath = "/resolve"
 const proxyHostResolveParam = "host"
@@ -12,9 +14,9 @@ const proxyURLResolveParam = "url"
 const proxyPolicyPath = "/policy"
 const proxyHealthCheckPath = "/health"
 
-let proxyScheme = DEFAULT_PROXY_SCHEME;
+let proxyScheme = HTTPS_PROXY_SCHEME;
 let proxyHost =  DEFAULT_PROXY_HOST;
-let proxyPort = DEFAULT_PROXY_PORT;
+let proxyPort = HTTPS_PROXY_PORT;
 let proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
 
 
@@ -72,9 +74,9 @@ chrome.storage.sync.get({ autoProxyConfig: true }, ({ autoProxyConfig }) => {
 
 function loadProxySettings() {
     chrome.storage.sync.get({
-      proxyScheme: DEFAULT_PROXY_SCHEME,
+      proxyScheme: HTTPS_PROXY_SCHEME,
       proxyHost: DEFAULT_PROXY_HOST,
-      proxyPort: DEFAULT_PROXY_PORT
+      proxyPort: HTTPS_PROXY_PORT
     }, (items) => {
       proxyScheme = items.proxyScheme;
       proxyHost = items.proxyHost;
@@ -172,9 +174,48 @@ function fetchAndApplyScionPAC() {
 }
 
 function fallbackToDefaults() {
-    proxyScheme = DEFAULT_PROXY_SCHEME;
-    proxyHost = DEFAULT_PROXY_HOST;
-    proxyPort =  DEFAULT_PROXY_PORT;
+    tryProxyConnection(HTTPS_PROXY_SCHEME, HTTPS_PROXY_PORT).then(success => {
+        if (success) {
+            setProxyConfiguration(HTTPS_PROXY_SCHEME, DEFAULT_PROXY_HOST, HTTPS_PROXY_PORT);
+        } else {
+            tryProxyConnection(HTTP_PROXY_SCHEME, HTTP_PROXY_PORT).then(success => {
+                if (success) {
+                    setProxyConfiguration(HTTP_PROXY_SCHEME, DEFAULT_PROXY_HOST, HTTP_PROXY_PORT);
+                } else {
+                    setProxyConfiguration(HTTPS_PROXY_SCHEME, DEFAULT_PROXY_HOST, HTTPS_PROXY_PORT);
+                    console.warn("Both HTTPS and HTTP proxy connections failed, using HTTPS as default");
+                }
+            });
+        }
+    });
+}
+
+function tryProxyConnection(scheme, port) {
+    return new Promise(resolve => {
+        const testUrl = `${scheme}://${DEFAULT_PROXY_HOST}:${port}${proxyHealthCheckPath}`;
+        console.log(`Testing proxy connection to ${testUrl}`);
+        
+        fetch(testUrl, { method: 'GET' })
+            .then(response => {
+                if (response.ok) {
+                    console.log(`Successfully connected to ${scheme} proxy`);
+                    resolve(true);
+                } else {
+                    console.warn(`Failed to connect to ${scheme} proxy: status ${response.status}`);
+                    resolve(false);
+                }
+            })
+            .catch(error => {
+                console.warn(`Error connecting to ${scheme} proxy:`, error);
+                resolve(false);
+            });
+    });
+}
+
+function setProxyConfiguration(scheme, host, port) {
+    proxyScheme = scheme;
+    proxyHost = host;
+    proxyPort = port;
     proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
     
     chrome.storage.sync.set({
@@ -182,7 +223,7 @@ function fallbackToDefaults() {
         proxyHost: proxyHost,
         proxyPort: proxyPort
     }, function() {
-        console.log("Falling back to default proxy configuration:", proxyAddress);
+        console.log(`Using proxy configuration: ${proxyAddress}`);
     });
     
     updateProxyConfiguration();

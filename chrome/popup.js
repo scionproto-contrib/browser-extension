@@ -102,12 +102,18 @@ function checkProxyStatus() {
         signal: AbortSignal.timeout(2000)
     }).then(response => {
         if (response.status === 200) {
-            proxyStatusMessage.textContent = "Connected to proxy";
-            proxyStatusMessage.innerHTML += " <span>&#x2705;</span> ";
+            
+            if (proxyAddress.startsWith('https://')) {
+                proxyStatusMessage.textContent = "Connected to proxy via HTTPS";
+                proxyStatusMessage.innerHTML += " <span>&#x2705;</span> ";
+                proxyHelpLink.classList.add('hidden');
+            } else {
+                proxyStatusMessage.textContent = "Connected to proxy via HTTP. Check help to connect via HTTPS.";
+                proxyStatusMessage.innerHTML += " <span>&#x26A0;</span> ";
+                showProxyHelpLink();
+            }
             const proxyDetailsContent = document.getElementById('proxy-details-content');
-            proxyDetailsContent.textContent = `Proxy at ${proxyAddress}`;
-            // Hide the help link when everything is working
-            proxyHelpLink.classList.add('hidden');
+            proxyDetailsContent.textContent = `Proxy at ${proxyAddress}`;            
         } else {
             // Show error message for non-200 responses
             console.warn("Proxy check failed:", response.status);
