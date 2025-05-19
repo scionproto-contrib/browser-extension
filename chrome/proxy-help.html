@@ -71,9 +71,11 @@
     
     <div class="troubleshooting-step">
         <h3>1. Check if the SCION Proxy is Running</h3>
-        <p>The SCION proxy service needs to be running on your machine or network. By default, the extension looks for the proxy at:</p>
+        <p>The SCION proxy service needs to be running on your machine or network. By default, the extension checks the proxy via HTTPS at:</p>
         <p><code>https://forward-proxy.scion:9443</code></p>
-        <p>Make sure the proxy service is active and accessible at this address. </p>
+        <p>If HTTPS fails the extension will fallback to connect via HTTP at:</p>
+        <p><code>http://forward-proxy.scion:9080</code></p>
+        <p>Make sure the proxy service is active and accessible at those addresses. </p>
         <p>If you are running a local instance of the SCION forward proxy, by default it will add the following entry on the  "/etc/hosts" file :</p>
         <p><code>127.0.0.1 forward-proxy.scion</code></p>
         <p>If you are within an enterprise or an institutional network, please contact your network administrator.</p>
@@ -86,11 +88,18 @@
         <ol>
             <li>Click on the extension options button</li>
             <li>Verify that your proxy settings are correct</li>
-            <li>Default values are: 
+            <li>Default values for HTTPS: 
                 <ul>
                     <li>Scheme: <code>https</code></li>
                     <li>Host: <code>forward-proxy.scion</code></li>
                     <li>Port: <code>9443</code></li>
+                </ul>
+            </li>
+            <li>Default values for HTTP: 
+                <ul>
+                    <li>Scheme: <code>http</code></li>
+                    <li>Host: <code>forward-proxy.scion</code></li>
+                    <li>Port: <code>9080</code></li>
                 </ul>
             </li>
         </ol>
@@ -100,7 +109,7 @@
         <h3>3. Check Network and Firewall Settings</h3>
         <p>Make sure your network and firewall settings allow connections to the proxy:</p>
         <ul>
-            <li>Verify that port 9443 (or your custom port) is open</li>
+            <li>Verify that port 9443 or 9080 (or your custom port) is open</li>
             <li>Check if any network security software is blocking the connection</li>
             <li>If using a custom hostname, ensure it resolves correctly</li>
         </ul>
@@ -115,6 +124,19 @@
             <li>Stop any running instances. If you are running it as a Linux systemd service, you can check "systemctl stop scion-caddy-forward-proxy.service" (or the service name you have configured)</li>
             <li>Restart the proxy service. If you are running it as a Linux systemd service, you can check "systemctl restart scion-caddy-forward-proxy.service" (or the service name you have configured)</li>
         </ol>
+    </div>
+
+    <div class="troubleshooting-step">
+        <h3>5. Disable Other Proxy Extensions</h3>
+        <p>Other proxy extensions may conflict with the SCION Browser Extension. Try disabling them temporarily to see if it resolves the issue.</p>
+    </div>
+
+    <div class="troubleshooting-step">
+        <h3>*Warning: Connecting over HTTP</h3>
+        <p>By default, the extension will prefer to connect over HTTPS. For HTTPS to work, you will need to import the Caddy proxy root certificate as a trusted certificate. For more information, follow the link in the note below.</p>
+        <p>After installing the certificate, reload the extension.</p>
+        <p>Alternatively, the extension will fall back to HTTP for the sake of usability. Be aware that the communication between your browser and the forward proxy will be unencrypted. The underlay connection may still be secured, depending on the session protocol used to reach the target server.</p>
+        <p>Therefore, this configuration is more likely to be acceptable if you are running the proxy locally.</p>
     </div>
 
     <div class="note">
