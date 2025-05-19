@@ -134,6 +134,7 @@
     <div class="troubleshooting-step">
         <h3>*Warning: Connecting over HTTP</h3>
         <p>By default, the extension will prefer to connect over HTTPS. For HTTPS to work, you will need to import the Caddy proxy root certificate as a trusted certificate. For more information, follow the link in the note below.</p>
+        <p>After installing the certificate, reload the extension.</p>
         <p>Alternatively, the extension will fall back to HTTP for the sake of usability. Be aware that the communication between your browser and the forward proxy will be unencrypted. The underlay connection may still be secured, depending on the session protocol used to reach the target server.</p>
         <p>Therefore, this configuration is more likely to be acceptable if you are running the proxy locally.</p>
     </div>
