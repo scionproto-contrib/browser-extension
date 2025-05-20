@@ -61,7 +61,7 @@ On the upper right corner, enable `Developer Mode`. Then click the `Load unpacke
     The error indicating that the manifest is deprecated does not impact the functionality at the moment, if you turn the extension on. 
     If you are using Chrome or Chromium, you can temporarily allow Manifest V2 https://chromeenterprise.google/policies/#ExtensionManifestV2Availability.
 
-Proxy-configuration
+Proxy configuration
 -------------------
 
 The browser extension will automatically configure the proxy settings for you, using WPAD (Web Proxy Auto-Discovery Protocol). 
