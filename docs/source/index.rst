@@ -44,7 +44,7 @@ Self-hosted Proxy option
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 If you rather prefer to run your own proxy, you can follow the instructions in the `documentation <https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html#running-the-scion-http-forward-proxy-locally>`__.
-Please note that for the latter, you will need to follow the instructions to enable a SCION endhost stack on your machine. 
+Please note that for this configuration, you will need to follow the instructions to enable a SCION endhost stack on your machine. 
 The `documentation <https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html#prerequisites>`__ provides a detailed guide on how to set it up.
 
 Installation
@@ -60,6 +60,17 @@ On the upper right corner, enable `Developer Mode`. Then click the `Load unpacke
 .. note::
     The error indicating that the manifest is deprecated does not impact the functionality at the moment, if you turn the extension on. 
     If you are using Chrome or Chromium, you can temporarily allow Manifest V2 https://chromeenterprise.google/policies/#ExtensionManifestV2Availability.
+
+Proxy-configuration
+-------------------
+
+The browser extension will automatically configure the proxy settings for you, using WPAD (Web Proxy Auto-Discovery Protocol). 
+This mechanism is used to automatically detect the proxy settings in your network. The browser use the generic WPAD URL ``http://wpad/wpad_scion.dat`` to find the proxy configuration file.
+Subsequently, it will validate the SCION proxy configuration file and set the proxy settings accordingly.
+
+If the WPAD mechanism is not available in your network, the browser extension will fallback to the defaults settings, i.e., using a generic hostname for the SCION HTTP Forward Proxy.
+Firstly, the extension will try to connect using HTTPS, if this fails, it will try to connect using HTTP. For more information regarding the needed configuration, for instance, certificate import, please check the `SCION HTTP Forward Proxy configuration <https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html#configuration>`_ documentation.
+Finally, if none of this works, the user may manually configure the proxy settings in the browser, by navigating to `Extensions->Manage Extensions->Proxy settings`.
 
 Usage
 -----
