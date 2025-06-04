@@ -2,8 +2,8 @@
 
 # -- Project information
 
-project = 'SCION Borwser Extension'
-copyright = '2024, ETHZ'
+project = 'SCION Browser Extension'
+copyright = '2025, ETHZ'
 author = 'ETH Zurich'
 
 release = '0.1'
