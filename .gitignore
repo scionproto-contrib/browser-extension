@@ -1,4 +1,5 @@
-.venv
+.env
 build/
 .vscode/
 node_modules/
+.as_name_map.js

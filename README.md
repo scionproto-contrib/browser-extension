@@ -20,3 +20,10 @@ Please refer to the [technical documentation](https://scion-browser-extension.re
    ```
    npm run build:css
    ```
+
+### Generate AS Name Map
+To generate the AS name map, run the following command:
+```
+   python3 retrieve_as_map.py
+```
+Copy the contents of `.as_name_map.js` to the "asNameMap" variable in `popup.js`.
