@@ -64,11 +64,9 @@ def generate_js_snippet(as_map):
     sorted_items = sorted(as_map.items(), key=lambda x: int(x[0]) if x[0].isdigit() else float('inf'))
     
     for i, (as_number, name) in enumerate(sorted_items):
-        # Escape quotes in the name
         escaped_name = name.replace('"', '\\"')
         js_content += f'    "{as_number}": "{escaped_name}"'
         
-        # Add comma if not the last item
         if i < len(sorted_items) - 1:
             js_content += ","
         js_content += "\n"
@@ -84,17 +82,14 @@ def main():
     
     print("Parsing AS data...")
     as_map = parse_as_data(html_content)
-    
     if not as_map:
         print("No AS data found")
         sys.exit(1)
     
     print(f"Found {len(as_map)} AS entries")
     
-    # Generate JavaScript snippet
     js_snippet = generate_js_snippet(as_map)
     
-    # Write to file
     output_file = ".as_name_map.js"
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(js_snippet)
