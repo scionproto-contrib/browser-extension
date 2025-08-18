@@ -434,7 +434,6 @@ window.onload = function () {
         let proxyPort = items.proxyPort;
         proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
 
-        updatePathUsage();
         checkProxyStatus();
     });
     
@@ -451,16 +450,21 @@ const updatePathUsage = () => {
             response.json().then(json => {
                 console.log(json)
                 const startIndex = 2; // The first indices are already used the parent container
-                if (json.length === 0) {
+                if (!json || json.length === 0) {
                     pathUsageContainer.innerHTML = "<p>No path usage data available\n</p>" + "<p>Try to configure your own policies to have acces to path usage data (under <i>Manage Preferences</i>).</p>";
+                }
+                json.forEach((pathUsage) => {
+                    console.log(pathUsage.Domain.split(":")[0])
+                    // we only expect one match
+                    if (popupMainDomain && pathUsage.Domain.split(":")[0] === popupMainDomain) {
+                        let pathUsageChild = newPathUsageChild(pathUsage, startIndex);
+                        pathUsageContainer.innerHTML += pathUsageChild;
+                    }
+                })
+                if (pathUsageContainer.innerHTML === "") {
+                    pathUsageContainer.innerHTML = "<p>No path usage data available for " + (popupMainDomain || "current domain") + "\n</p>" + "<p>Try to configure your own policies to have acces to path usage data (under <i>Manage Preferences</i>).</p>";
                     return;
                 }
-                json.forEach((pathUsage, i) => {
-                    let pathUsageChild = newPathUsageChild(pathUsage, i + startIndex);
-                    console.log(pathUsageChild)
-                    pathUsageContainer.innerHTML += pathUsageChild
-                })
-                console.log(pathUsageContainer.innerHTML)
             });
         }
     });
@@ -726,6 +730,9 @@ async function loadRequestInfo() {
         } else {
             scionsupport.innerHTML = "No resourced loaded via SCION";
         }
+        
+        // Update path usage for the current domain
+        updatePathUsage();
     });
 
 }
