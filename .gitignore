@@ -1,5 +1,6 @@
 .env
 build/
+.idea/
 .vscode/
 node_modules/
 .as_name_map.js
