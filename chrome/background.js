@@ -1,6 +1,9 @@
 // Copyright 2024 ETH Zurich, Ovgu
 'use strict';
 
+import {fetchAndApplyScionPAC, loadProxySettings} from "./background_helpers/pac_handler.js";
+import {allowAllgeofence, geofence} from "./background_helpers/geofence_handler.js";
+
 const HTTPS_PROXY_SCHEME = "https"
 const HTTP_PROXY_SCHEME = "http"
 const DEFAULT_PROXY_HOST = "forward-proxy.scion";
@@ -61,10 +64,10 @@ getStorageValue('extension_running').then(extensionRunning => {
     updateRunningIcon(extensionRunning);
 });
 
-/*--- PAC --------------------------------------------------------------------*/
 
+/*--- PAC --------------------------------------------------------------------*/
 // Load saved configuration at startup
-chrome.storage.sync.get({ autoProxyConfig: true }, ({ autoProxyConfig }) => {
+chrome.storage.sync.get({autoProxyConfig: true}, ({autoProxyConfig}) => {
     if (autoProxyConfig) {
         fetchAndApplyScionPAC();
     } else {
@@ -72,194 +75,13 @@ chrome.storage.sync.get({ autoProxyConfig: true }, ({ autoProxyConfig }) => {
     }
 });
 
-function loadProxySettings() {
-    chrome.storage.sync.get({
-      proxyScheme: HTTPS_PROXY_SCHEME,
-      proxyHost: DEFAULT_PROXY_HOST,
-      proxyPort: HTTPS_PROXY_PORT
-    }, (items) => {
-      proxyScheme = items.proxyScheme;
-      proxyHost = items.proxyHost;
-      proxyPort = items.proxyPort;
-      proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
-      
-      updateProxyConfiguration();
-    });
-}
-
-
-function parseProxyFromPAC(pacScript) {
-    // We look for the first HTTPS definition, if not found, we look for the first HTTP definition.
-    const httpsProxyMatch = pacScript.match(/HTTPS\s+([^:]+):(\d+)/i);
-    const httpProxyMatch = pacScript.match(/PROXY\s+([^:]+):(\d+)/i);
-    
-    if (httpsProxyMatch) {
-        if (!isValidPort(httpsProxyMatch[2])) {
-            console.warn("Invalid port number in PAC script");
-            return null;
-        }
-      return {
-        proxyScheme: "https",
-        proxyHost: httpsProxyMatch[1],
-        proxyPort: httpsProxyMatch[2]
-      };
-    } else if (httpProxyMatch) {
-        if (!isValidPort(httpProxyMatch[2])) {
-            console.warn("Invalid port number in PAC script");
-            return null;
-        }
-      return {
-        proxyScheme: "http",
-        proxyHost: httpProxyMatch[1],
-        proxyPort: httpProxyMatch[2]
-      };
-    } else {
-      console.warn("No valid proxy configuration found in PAC script");
-    }
-    
-    return null;
-}
-
-function isValidPort(port) {
-    const portNum = parseInt(port, 10);
-    return !isNaN(portNum) && portNum > 0 && portNum <= 65535;
-}
-  
-function fetchAndApplyScionPAC() {
-    fetch(`http://wpad/wpad_scion.dat`)
-    .then(response => {
-        if (!response.ok) {
-          throw new Error(`Retrieving PAC config; status: ${response.status}`);
-        }
-        return response.text();
-      })
-      .then(pacScript => {
-        const proxyConfig = parseProxyFromPAC(pacScript);
-        
-        if (proxyConfig) {
-         // As long as we can parse the PAC script, we assume it is correct,
-         // i.e., we don't check the proxy health here.
-          proxyScheme = proxyConfig.proxyScheme;
-          proxyHost = proxyConfig.proxyHost;
-          proxyPort = proxyConfig.proxyPort;
-          proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
-
-          chrome.storage.sync.set({
-                proxyScheme: proxyScheme,
-                proxyHost: proxyHost,
-                proxyPort: proxyPort
-            }, function() {
-                console.log("Detected proxy configuration:", proxyAddress);
-            });
-
-          const config = {
-            mode: "pac_script",
-            pacScript: {
-              data: pacScript
-            }
-          };
-          
-          chrome.proxy.settings.set({ value: config, scope: 'regular' }, function() {
-            console.log("SCION PAC configuration from WPAD applied");
-          });
-        } else{
-            throw new Error("Failed to parse PAC script");
-        }
-        
-      })
-      .catch(error => {
-        console.warn("Error on WPAD process, falling back to default:", error);
-        fallbackToDefaults();
-      });
-}
-
-function fallbackToDefaults() {
-    tryProxyConnection(HTTPS_PROXY_SCHEME, HTTPS_PROXY_PORT).then(success => {
-        if (success) {
-            setProxyConfiguration(HTTPS_PROXY_SCHEME, DEFAULT_PROXY_HOST, HTTPS_PROXY_PORT);
-        } else {
-            tryProxyConnection(HTTP_PROXY_SCHEME, HTTP_PROXY_PORT).then(success => {
-                if (success) {
-                    setProxyConfiguration(HTTP_PROXY_SCHEME, DEFAULT_PROXY_HOST, HTTP_PROXY_PORT);
-                } else {
-                    setProxyConfiguration(HTTPS_PROXY_SCHEME, DEFAULT_PROXY_HOST, HTTPS_PROXY_PORT);
-                    console.warn("Both HTTPS and HTTP proxy connections failed, using HTTPS as default");
-                }
-            });
-        }
-    });
-}
-
-function tryProxyConnection(scheme, port) {
-    return new Promise(resolve => {
-        const testUrl = `${scheme}://${DEFAULT_PROXY_HOST}:${port}${proxyHealthCheckPath}`;
-        console.log(`Testing proxy connection to ${testUrl}`);
-        
-        fetch(testUrl, { method: 'GET' })
-            .then(response => {
-                if (response.ok) {
-                    console.log(`Successfully connected to ${scheme} proxy`);
-                    resolve(true);
-                } else {
-                    console.warn(`Failed to connect to ${scheme} proxy: status ${response.status}`);
-                    resolve(false);
-                }
-            })
-            .catch(error => {
-                console.warn(`Error connecting to ${scheme} proxy:`, error);
-                resolve(false);
-            });
-    });
-}
-
-function setProxyConfiguration(scheme, host, port) {
-    proxyScheme = scheme;
-    proxyHost = host;
-    proxyPort = port;
-    proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
-    
-    chrome.storage.sync.set({
-        proxyScheme: proxyScheme,
-        proxyHost: proxyHost,
-        proxyPort: proxyPort
-    }, function() {
-        console.log(`Using proxy configuration: ${proxyAddress}`);
-    });
-    
-    updateProxyConfiguration();
-}
-
-
-// direct everything to the forward-proxy except if the target is the forward-proxy, then go direct
-function updateProxyConfiguration() {
-    const config = {
-      mode: "pac_script",
-      pacScript: {
-        data:
-          "function FindProxyForURL(url, host) {\n" +
-          `    if (isPlainHostName(host) || dnsDomainIs(host, "${proxyHost}")) {\n` +
-          `        return "DIRECT"\n` +
-          `    } else {\n` +
-          `       return '${proxyScheme === "https" ? "HTTPS" : "PROXY"} ${proxyHost}:${proxyPort}';\n` +
-          `    }\n` +
-          "}",
-      }
-    };
-    
-    chrome.proxy.settings.set({ value: config, scope: 'regular' }, function() {
-      console.log("Proxy configuration updated");
-      chrome.proxy.settings.get({}, function(config) {
-        console.log(config);
-      });
-    });
-  }
-
-chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     if (request.action === "fetchAndApplyScionPAC") {
-      fetchAndApplyScionPAC();
-      return true;
+        fetchAndApplyScionPAC();
+        return true;
     }
- });
+});
+/*--- END PAC ----------------------------------------------------------------*/
 
 /*--- storage ----------------------------------------------------------------*/
 
@@ -296,114 +118,7 @@ function updateRunningIcon(extensionRunning) {
     }
 }
 
-function allowAllgeofence(allowAll) {
-    console.log("allowAllgeofence: ", allowAll)
-
-    if (allowAll) {
-        let whitelist = new Array()
-        whitelist.push("+")
-        setPolicy(whitelist)
-        return
-    }
-
-    getStorageValue('isd_whitelist').then((isdSet) => {
-        console.log(isdSet)
-        geofence(isdSet);
-    });
-}
-
-function geofence(isdList) {
-    console.log("geofence: ", isdList)
-
-    let whitelist = new Array()
-    for (const isd of isdList) {
-        whitelist.push("+ " + isd);
-    }
-    whitelist.push("-") // deny everything else
-    setPolicy(whitelist)
-}
-
-// A couple of things happend on a policy change:
-// 1. all cookies and cached proxy authorization credentials are deleted
-// 2. the Skip proxy is updated with the new policy
-// 3. the path policy cookie is globally stored and will be used as proxy authorization from now on
-function setPolicy(policy) {
-    let sendSetPolicyRequest = () => {
-        var req = new XMLHttpRequest();
-        req.open("PUT", `${proxyAddress}${proxyPolicyPath}`, true);
-        req.setRequestHeader('Content-type', 'application/json; charset=utf-8');
-
-        req.onreadystatechange = function () {
-            if (req.readyState != XMLHttpRequest.DONE) {
-                return
-            }
-
-            // The fetch operation is complete. This could mean that either the data transfer has been completed successfully or failed.
-            console.log("response code to setPolicy:" + req.status);
-            console.log("set policy: ", JSON.stringify(policy))
-
-            if (req.status != 200) {
-                console.error("Error setting policy: ", req.status)
-                return
-            }
-
-            chrome.cookies.getAll({ name: "caddy-scion-forward-proxy" }, function (cookies) {
-                console.log("all cookies: ", cookies)
-                cookies = cookies.filter((c) => c.domain == proxyHost)
-                if (cookies.length > 1) {
-                    console.log("expected at most one cookie")
-                    for (const c of cookies) {
-                        console.log(c.name, c.value, c.domain)
-                    }
-                }
-
-                if (cookies.length > 0) {
-                    policyCookie = cookies[0]
-                    console.log("new path policy cookie: ", cookies[0])
-
-                    // when we set the cookie before (function below), the cookie
-                    // is set with ".forward-proxy.scion" as domain (probably since we remove the hostOnly [because of the API]).
-                    // The incoming cookie is set with "forward-proxy.scion" as domain.
-                    // Since it is convoluted to remove one of the cookies, we just set the cookie again
-                    // to avoid inconsistencies between the two of them. Otherwise, calls to /path-usage (which carry the cookie)
-                    // have been observer to yield incorrect information.
-
-                    // we have to remove some fields that are not allowed to be set
-                    // by the API
-                    delete policyCookie["hostOnly"];
-                    delete policyCookie["session"];
-                    policyCookie.url = `${proxyScheme}://${proxyHost}`;
-                    chrome.cookies.set(policyCookie)
-                }
-            })
-        };
-
-        req.send(JSON.stringify(policy));
-    }
-
-    // this not only clears all cookies but also the proxy auth credentials
-    chrome.browsingData.remove({ 
-        "origins": [
-            `${proxyScheme}://${proxyHost}`
-        ] }, { "cookies": true }, () => {
-        // as we have just removed all cookie we have to readd it
-        if (policyCookie != null) {
-
-            chrome.cookies.set(policyCookie, () => {
-                chrome.cookies.get({
-                    url: policyCookie.url,
-                    name: policyCookie.name
-                  }, (resultCookie) => {
-                    console.log("Stored cookie:", resultCookie);
-                  });
-                
-                sendSetPolicyRequest()
-            })
-        } else {
-            sendSetPolicyRequest()
-        }
-    })
-}
+/*--- END storage ------------------------------------------------------------*/
 
 /*--- tabs -------------------------------------------------------------------*/
 
