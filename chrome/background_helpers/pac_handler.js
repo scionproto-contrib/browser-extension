@@ -1,14 +1,14 @@
-const HTTPS_PROXY_SCHEME = "https"
-const HTTP_PROXY_SCHEME = "http"
-const DEFAULT_PROXY_HOST = "forward-proxy.scion";
-const HTTPS_PROXY_PORT = "9443";
-const HTTP_PROXY_PORT = "9080";
-const proxyHealthCheckPath = "/health"
+export const HTTPS_PROXY_SCHEME = "https"
+export const HTTP_PROXY_SCHEME = "http"
+export const DEFAULT_PROXY_HOST = "forward-proxy.scion.ethz.ch";
+export const HTTPS_PROXY_PORT = "9443";
+export const HTTP_PROXY_PORT = "9080";
+export const proxyHealthCheckPath = "/health"
 
 let proxyScheme = HTTPS_PROXY_SCHEME;
-let proxyHost = DEFAULT_PROXY_HOST;
+export let proxyHost = DEFAULT_PROXY_HOST;
 let proxyPort = HTTPS_PROXY_PORT;
-let proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
+export let proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
 
 export function loadProxySettings() {
     chrome.storage.sync.get({

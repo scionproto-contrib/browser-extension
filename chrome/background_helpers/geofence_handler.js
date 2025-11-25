@@ -1,6 +1,5 @@
-const HTTPS_PROXY_SCHEME = "https"
-const DEFAULT_PROXY_HOST = "forward-proxy.scion";
-const HTTPS_PROXY_PORT = "9443";
+import {getStorageValue} from "../shared/storage.js";
+import {DEFAULT_PROXY_HOST, HTTPS_PROXY_PORT, HTTPS_PROXY_SCHEME} from "./pac_handler.js";
 
 let proxyScheme = HTTPS_PROXY_SCHEME;
 export let proxyHost = DEFAULT_PROXY_HOST;
@@ -20,7 +19,7 @@ export function allowAllgeofence(allowAll, policyCookie) {
 
     getStorageValue('isd_whitelist').then((isdSet) => {
         console.log(isdSet)
-        geofence(isdSet);
+        geofence(isdSet, policyCookie);
     });
 }
 

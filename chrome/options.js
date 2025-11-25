@@ -5,8 +5,10 @@
 'use strict';
 
 // Default proxy configuration values
+import {getStorageValue, saveStorageValue, toSet} from "./shared/storage.js";
+
 const DEFAULT_PROXY_SCHEME = 'https';
-const DEFAULT_PROXY_HOST = 'forward-proxy.scion';
+const DEFAULT_PROXY_HOST = 'forward-proxy.scion.ethz.ch';
 const DEFAULT_PROXY_PORT = '9443';
 
 const toggleGlobalStrict = document.getElementById('toggleGlobalStrict');
@@ -42,16 +44,15 @@ const tableSitePreferencesRow = `
 
 const placeholderToggleID = "toggleISD-";
 
-window.onload = function () {
-    getStorageValue('isd_whitelist').then((isdSet) => {
-        displayToggleISD(isdSet);
-    });
-    getStorageValue('isd_all').then(value => {
-        document.getElementById("allowAllTrafficToggle").checked = value
-    });
+document.addEventListener("DOMContentLoaded", async () => {
+    const isdSet = await getStorageValue("isd_whitelist");
+    displayToggleISD(isdSet);
+
+    document.getElementById("allowAllTrafficToggle").checked = await getStorageValue("isd_all");
+
     registerToggleISDHandler();
     registerToggleAllHandler();
-}
+});
 
 function displayToggleISD(isdSet) {
     if (!isdSet) {

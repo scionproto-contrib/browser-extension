@@ -1,8 +1,12 @@
 // Copyright 2024 ETH Zurich, Ovgu
 'use strict';
 
+
+import {getStorageValue, saveStorageValue} from "./shared/storage.js";
+import {getRequestsDatabaseAdapter} from "./database.js";
+
 const DEFAULT_PROXY_SCHEME = "https"
-const DEFAULT_PROXY_HOST = "forward-proxy.scion";
+const DEFAULT_PROXY_HOST = "forward-proxy.scion.ethz.ch";
 const DEFAULT_PROXY_PORT = "9443";
 const proxyPathUsagePath = "/path-usage"
 const proxyHealthCheckPath = "/health"
@@ -398,46 +402,34 @@ let proxyAddress = `${DEFAULT_PROXY_SCHEME}://${DEFAULT_PROXY_HOST}:${DEFAULT_PR
 
 var perSiteStrictMode = {};
 var popupMainDomain = "";
-var getRequestsDatabaseAdapter;
 
 checkboxRunning.onclick = toggleExtensionRunning;
 
 document.getElementById('button-options').addEventListener('click', function () {
-    chrome.tabs.create({ 'url': 'chrome://extensions/?options=' + chrome.runtime.id });
+    chrome.tabs.create({'url': 'chrome://extensions/?options=' + chrome.runtime.id});
 });
 
-// TODO: if there are some race conditions, add a startup
-// function that is called manually after all scripts are loaded
-// Let's later move to something that allows using imports and
-// maybe even typescript, e.g. https://github.com/abhijithvijayan/web-extension-starter
-(() => {
-    const src = chrome.extension.getURL('database.js');
-    import(src).then(req => {
-        getRequestsDatabaseAdapter = req.getRequestsDatabaseAdapter;
-        getStorageValue('perSiteStrictMode').then((val) => {
-            perSiteStrictMode = val || {};
-            loadRequestInfo();
-        });
+getStorageValue('perSiteStrictMode').then((val) => {
+    perSiteStrictMode = val || {};
+    loadRequestInfo();
+});
 
-    })
+document.addEventListener("DOMContentLoaded", () => {
+    chrome.storage.sync.get(
+        {
+            proxyScheme: DEFAULT_PROXY_SCHEME,
+            proxyHost: DEFAULT_PROXY_HOST,
+            proxyPort: DEFAULT_PROXY_PORT
+        },
+        (items) => {
+            const { proxyScheme, proxyHost, proxyPort } = items;
 
-})();
+            proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
 
-window.onload = function () {
-    chrome.storage.sync.get({
-        proxyScheme: DEFAULT_PROXY_SCHEME,
-        proxyHost: DEFAULT_PROXY_HOST,
-        proxyPort: DEFAULT_PROXY_PORT
-      }, (items) => {
-        let proxyScheme = items.proxyScheme;
-        let proxyHost = items.proxyHost;
-        let proxyPort = items.proxyPort;
-        proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
-
-        checkProxyStatus();
-    });
-    
-}
+            checkProxyStatus();
+        }
+    );
+});
 
 const updatePathUsage = () => {
     pathUsageContainer.innerHTML = "";
@@ -474,13 +466,13 @@ const updatePathUsage = () => {
 function checkProxyStatus() {
     proxyStatusMessage.textContent = "Checking proxy status...";
     proxyHelpLink.classList.add('hidden');
-    
+
     fetch(`${proxyAddress}${proxyHealthCheckPath}`, {
         method: "GET",
         signal: AbortSignal.timeout(2000)
     }).then(response => {
         if (response.status === 200) {
-            
+
             if (proxyAddress.startsWith('https://')) {
                 proxyStatusMessage.textContent = "Connected to proxy via HTTPS";
                 proxyStatusMessage.innerHTML += " <span>&#x2705;</span> ";
@@ -491,7 +483,7 @@ function checkProxyStatus() {
                 showProxyHelpLink();
             }
             const proxyDetailsContent = document.getElementById('proxy-details-content');
-            proxyDetailsContent.textContent = `Proxy at ${proxyAddress}`;            
+            proxyDetailsContent.textContent = `Proxy at ${proxyAddress}`;
         } else {
             // Show error message for non-200 responses
             console.warn("Proxy check failed:", response.status);
@@ -516,10 +508,10 @@ function checkProxyStatus() {
 function showProxyHelpLink() {
     proxyHelpLink.classList.remove('hidden');
     proxyHelpLink.href = chrome.runtime.getURL('proxy-help.html');
-    
-    proxyHelpLink.addEventListener('click', function(event) {
+
+    proxyHelpLink.addEventListener('click', function (event) {
         event.preventDefault();
-        chrome.tabs.create({ url: this.href });
+        chrome.tabs.create({url: this.href});
     });
 }
 
@@ -572,8 +564,8 @@ const newPathUsageChild = (pathUsage, index) => {
           <label class="ac-label" for="ac-${index}-path"><b>Path:</b></label>
           <article class="ac-sub-text">
            ${pathUsage.Path.map(ia =>
-            `<div><p>${ia} (${asNameMap[ia.split("-")[1]]})</p></div>`
-        ).join("")}
+        `<div><p>${ia} (${asNameMap[ia.split("-")[1]]})</p></div>`
+    ).join("")}
           </article >
         </div >
     </article >
@@ -660,13 +652,13 @@ async function loadRequestInfo() {
     const databaseAdapter = await getRequestsDatabaseAdapter();
 
     const checkedDomains = [];
-    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+    chrome.tabs.query({active: true, currentWindow: true}, async (tabs) => {
         var activeTab = tabs[0];
         var activeTabId = activeTab.id; // or do whatever you need
         const url = new URL(activeTab.url);
         popupMainDomain = url.hostname;
 
-        let requests = await databaseAdapter.get({ mainDomain: url.hostname }, true);
+        let requests = await databaseAdapter.get({mainDomain: url.hostname}, true);
         const mainDomainSCIONEnabled = requests.find(r => r.tabId === activeTabId && r.domain === url.hostname && r.scionEnabled);
 
         if (perSiteStrictMode[url.hostname]) {
@@ -730,7 +722,7 @@ async function loadRequestInfo() {
         } else {
             scionsupport.innerHTML = "No resourced loaded via SCION";
         }
-        
+
         // Update path usage for the current domain
         updatePathUsage();
     });
