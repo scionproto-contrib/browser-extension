@@ -1,29 +1,32 @@
 import {getStorageValue} from "../shared/storage.js";
 import {DEFAULT_PROXY_HOST, HTTPS_PROXY_PORT, HTTPS_PROXY_SCHEME} from "./proxy_handler.js";
 
+const proxyPolicyPath = "/policy"
+
 let proxyScheme = HTTPS_PROXY_SCHEME;
+export let policyCookie = null;
 export let proxyHost = DEFAULT_PROXY_HOST;
 export let proxyAddress = `${proxyScheme}://${proxyHost}:${HTTPS_PROXY_PORT}`;
 
-const proxyPolicyPath = "/policy"
+export function resetPolicyCookie() { policyCookie = null; }
 
-export function allowAllgeofence(allowAll, policyCookie) {
+export function allowAllgeofence(allowAll) {
     console.log("allowAllgeofence: ", allowAll)
 
     if (allowAll) {
         let whitelist = []
         whitelist.push("+")
-        setPolicy(whitelist, policyCookie)
+        setPolicy(whitelist)
         return
     }
 
     getStorageValue('isd_whitelist').then((isdSet) => {
         console.log(isdSet)
-        geofence(isdSet, policyCookie);
+        geofence(isdSet);
     });
 }
 
-export function geofence(isdList, policyCookie) {
+export function geofence(isdList) {
     console.log("geofence: ", isdList)
 
     let whitelist = []
@@ -31,14 +34,14 @@ export function geofence(isdList, policyCookie) {
         whitelist.push("+ " + isd);
     }
     whitelist.push("-") // deny everything else
-    setPolicy(whitelist, policyCookie)
+    setPolicy(whitelist)
 }
 
 // A couple of things happend on a policy change:
 // 1. all cookies and cached proxy authorization credentials are deleted
 // 2. the Skip proxy is updated with the new policy
 // 3. the path policy cookie is globally stored and will be used as proxy authorization from now on
-function setPolicy(policy, policyCookie) {
+function setPolicy(policy) {
     let sendSetPolicyRequest = () => {
         const url = `${proxyAddress}${proxyPolicyPath}`;
         fetch(url, {
