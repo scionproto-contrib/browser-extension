@@ -4,9 +4,9 @@
 import {fetchAndApplyScionPAC, loadProxySettings} from "./background_helpers/proxy_handler.js";
 import {allowAllgeofence, geofence, resetPolicyCookie} from "./background_helpers/geofence_handler.js";
 import {getStorageValue, saveStorageValue} from "./shared/storage.js";
-import {getRequestsDatabaseAdapter} from "./database.js";
 import {initializeDnr} from "./background_helpers/dnr_handler.js";
 import {initializeRequestInterceptionListeners, resetKnownHostnames} from "./background_helpers/request_interception_handler.js";
+import {initializeTabListeners} from "./background_helpers/tab_handler.js";
 
 
 const GLOBAL_STRICT_MODE = "globalStrictMode"
@@ -92,45 +92,7 @@ function updateRunningIcon(extensionRunning) {
 /*--- END storage ------------------------------------------------------------*/
 
 /*--- tabs -------------------------------------------------------------------*/
-
-// User switches between tabs
-chrome.tabs.onActivated.addListener(function (activeInfo) {
-    chrome.tabs.get(activeInfo.tabId, (tab) => {
-        handleTabChange(tab);
-    });
-});
-
-// Update icon depending on hostname of current active tab
-chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
-    handleTabChange(tab);
-});
-
-// Displays a green/blue SCION icon depending on the current url is
-// being forwarded via SCION
-async function handleTabChange(tab) {
-    if (tab.active && tab.url) {
-        const url = new URL(tab.url);
-        const databaseAdapter = await getRequestsDatabaseAdapter();
-        let requests = await databaseAdapter.get({ mainDomain: url.hostname });
-        let mixedContent;
-
-        const mainDomainSCIONEnabled = requests.find(r => r.tabId === tab.id && r.domain === url.hostname && r.scionEnabled);
-        requests.forEach(r => {
-            if (!r.scionEnabled) {
-                mixedContent = true;
-            }
-        });
-        if (mainDomainSCIONEnabled) {
-            if (mixedContent) {
-                await chrome.action.setIcon({path: "/images/scion-38_mixed.jpg"});
-            } else {
-                await chrome.action.setIcon({path: "/images/scion-38_enabled.jpg"});
-            }
-        } else {
-            await chrome.action.setIcon({path: "/images/scion-38_not_available.jpg"});
-        }
-    }
-}
+initializeTabListeners()
 
 /*--- requests ---------------------------------------------------------------*/
 initializeRequestInterceptionListeners()
