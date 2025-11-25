@@ -1,5 +1,5 @@
 import {getStorageValue} from "../shared/storage.js";
-import {DEFAULT_PROXY_HOST, HTTPS_PROXY_PORT, HTTPS_PROXY_SCHEME} from "./pac_handler.js";
+import {DEFAULT_PROXY_HOST, HTTPS_PROXY_PORT, HTTPS_PROXY_SCHEME} from "./proxy_handler.js";
 
 let proxyScheme = HTTPS_PROXY_SCHEME;
 export let proxyHost = DEFAULT_PROXY_HOST;
