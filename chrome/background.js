@@ -1,7 +1,7 @@
 // Copyright 2024 ETH Zurich, Ovgu
 'use strict';
 
-import {fetchAndApplyScionPAC, loadProxySettings} from "./background_helpers/proxy_handler.js";
+import {initializeProxyHandler, loadProxySettings} from "./background_helpers/proxy_handler.js";
 import {allowAllgeofence, geofence, resetPolicyCookie} from "./background_helpers/geofence_handler.js";
 import {getStorageValue, saveStorageValue} from "./shared/storage.js";
 import {initializeDnr, reAddAllDnrBlockRules, removeAllDnrBlockRules} from "./background_helpers/dnr_handler.js";
@@ -39,21 +39,7 @@ getStorageValue('extension_running').then(extensionRunning => {
 
 
 /*--- PAC --------------------------------------------------------------------*/
-// Load saved configuration at startup
-chrome.storage.sync.get({ autoProxyConfig: true }, ({ autoProxyConfig }) => {
-    if (autoProxyConfig) {
-        fetchAndApplyScionPAC();
-    } else {
-        loadProxySettings();
-    }
-});
-
-chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-    if (request.action === "fetchAndApplyScionPAC") {
-        fetchAndApplyScionPAC();
-        return true;
-    }
-});
+initializeProxyHandler()
 /*--- END PAC ----------------------------------------------------------------*/
 
 /*--- storage ----------------------------------------------------------------*/

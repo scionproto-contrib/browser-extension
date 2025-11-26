@@ -14,6 +14,24 @@ export let proxyHost = DEFAULT_PROXY_HOST;
 let proxyPort = HTTPS_PROXY_PORT;
 export let proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
 
+export function initializeProxyHandler() {
+    // Load saved configuration at startup
+    chrome.storage.sync.get({ autoProxyConfig: true }, ({ autoProxyConfig }) => {
+        if (autoProxyConfig) {
+            fetchAndApplyScionPAC();
+        } else {
+            loadProxySettings();
+        }
+    });
+
+    chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+        if (request.action === "fetchAndApplyScionPAC") {
+            fetchAndApplyScionPAC();
+            return true;
+        }
+    });
+}
+
 export function loadProxySettings() {
     chrome.storage.sync.get({
         proxyScheme: HTTPS_PROXY_SCHEME,
@@ -67,7 +85,7 @@ function isValidPort(port) {
     return !isNaN(portNum) && portNum > 0 && portNum <= 65535;
 }
 
-export function fetchAndApplyScionPAC() {
+function fetchAndApplyScionPAC() {
     fetch(`http://wpad/wpad_scion.dat`)
         .then(response => {
             if (!response.ok) {
