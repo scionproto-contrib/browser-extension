@@ -116,10 +116,10 @@ class DatabaseAdapter {
         });
     }
 
-    update = (id, newEntry) => {
+    update = (requestId, newEntry) => {
         return new Promise(resolve => {
             const list = root.database[this.table] || (root.database[this.table] = []);
-            const entryIndex = list.findIndex(r => r.requestId === id);
+            const entryIndex = list.findIndex(r => r.requestId === requestId);
             if (entryIndex >= 0) {
                 const updated = { ...list[entryIndex], ...newEntry };
                 list[entryIndex] = updated;

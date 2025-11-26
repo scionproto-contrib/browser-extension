@@ -7,6 +7,17 @@ const NextDnrRuleId = "nextDnrRuleId"
 
 const ALL_RESOURCE_TYPES = ["main_frame", "sub_frame", "xmlhttprequest", "script", "image", "font", "media", "stylesheet", "object", "other", "ping", "websocket", "webtransport"];
 
+// lock to prevent interleavings when generating block rule IDs since access to sync storage is async
+let idLock = Promise.resolve();
+
+function withLock(fn) {
+    // chain the new work onto the previous one
+    const p = idLock.then(fn, fn);
+    // ensure errors don’t break the chain forever
+    idLock = p.catch(() => {
+    });
+    return p;
+}
 
 export async function initializeDnr(globalStrictMode) {
     console.log("Initializing DNR");
@@ -92,14 +103,16 @@ function createBlockRule(host, id) {
  * Fetches (and returns it) the current value of `NextDnrRuleId` in sync storage and increases that value in storage by 1.
  */
 export async function fetchNextDnrRuleId() {
-    const nextDnrRuleId = await getStorageValue(NextDnrRuleId)
-    if (!nextDnrRuleId) {
-        console.error("An error occurred during fetchNextDnrRuleId - There was no value stored, the default 'undefined' was returned.");
-        return -1;
-    }
+    return withLock(async () => {
+        const nextDnrRuleId = await getStorageValue(NextDnrRuleId)
+        if (!nextDnrRuleId) {
+            console.error("An error occurred during fetchNextDnrRuleId - There was no value stored, the default 'undefined' was returned.");
+            return -100;
+        }
 
-    // increasing the value in storage by 1
-    await saveStorageValue(NextDnrRuleId, nextDnrRuleId + 1);
+        // increasing the value in storage by 1
+        await saveStorageValue(NextDnrRuleId, nextDnrRuleId + 1);
 
-    return nextDnrRuleId;
+        return nextDnrRuleId;
+    })
 }

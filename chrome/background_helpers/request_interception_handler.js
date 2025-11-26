@@ -8,19 +8,21 @@ let isHostnameSCION = {};
 
 export function initializeRequestInterceptionListeners() {
     // Request intercepting (see https://developer.chrome.com/docs/extensions/reference/api/webRequest#type-BlockingResponse)
-    chrome.webRequest.onBeforeRequest.addListener(onBeforeRequest, { urls: ["<all_urls>"] });
+    chrome.webRequest.onBeforeRequest.addListener(onBeforeRequest, {urls: ["<all_urls>"]});
 
-    chrome.webRequest.onHeadersReceived.addListener(onHeadersReceived, { urls: ["<all_urls>"] });
+    chrome.webRequest.onHeadersReceived.addListener(onHeadersReceived, {urls: ["<all_urls>"]});
 
     // in manifest version 3 (MV3), the onAuthRequired is the only listener that still supports and accepts the 'blocking' extraInfoSpec
-    chrome.webRequest.onAuthRequired.addListener(onAuthRequired, { urls: ["<all_urls>"] }, ['blocking']);
+    chrome.webRequest.onAuthRequired.addListener(onAuthRequired, {urls: ["<all_urls>"]}, ['blocking']);
 
-    chrome.webRequest.onBeforeRedirect.addListener(onBeforeRedirect, { urls: ["<all_urls>"] });
+    chrome.webRequest.onBeforeRedirect.addListener(onBeforeRedirect, {urls: ["<all_urls>"]});
 
-    chrome.webRequest.onErrorOccurred.addListener(onErrorOccurred, { urls: ["<all_urls>"] });
+    chrome.webRequest.onErrorOccurred.addListener(onErrorOccurred, {urls: ["<all_urls>"]});
 }
 
-export function resetKnownHostnames() { isHostnameSCION = {}; }
+export function resetKnownHostnames() {
+    isHostnameSCION = {};
+}
 
 function onBeforeRequest(requestInfo) {
 
@@ -38,7 +40,7 @@ function onBeforeRequest(requestInfo) {
 
     console.log("<onBeforeRequest> REQUEST URL: " + JSON.stringify(requestInfo.url));
 
-    getRequestsDatabaseAdapter().then(databaseAdapter => {
+    getRequestsDatabaseAdapter().then(async databaseAdapter => {
         let mainDomain;
         if (requestInfo.type === "main_frame") mainDomain = url.hostname;
         else if (requestInfo.initiator) mainDomain = new URL(requestInfo.initiator).hostname;
@@ -57,11 +59,33 @@ function onBeforeRequest(requestInfo) {
         if (url.hostname in isHostnameSCION) {
             console.log(`Host ${url.hostname} is known to be ${isHostnameSCION[url.hostname] ? "" : "non-"}SCION. Canceling resolve of hostname via proxy.`);
             requestDBEntry.scionEnabled = isHostnameSCION[url.hostname];
-            databaseAdapter.add(requestDBEntry, {
+            const first = databaseAdapter.first({
                 mainDomain: requestDBEntry.mainDomain,
                 scionEnabled: requestDBEntry.scionEnabled,
                 domain: requestDBEntry.domain,
-            });
+            })
+            if (first == null) {
+                databaseAdapter.add(requestDBEntry, {
+                    mainDomain: requestDBEntry.mainDomain,
+                    scionEnabled: requestDBEntry.scionEnabled,
+                    domain: requestDBEntry.domain,
+                });
+            } else {
+                // assign block rule if it is non-scion but does not have one assigned
+                if (!first.scionEnabled && first.dnrBlockRuleId === -1) {
+                    const dnrBlockRuleId = await fetchNextDnrRuleId();
+                    requestDBEntry.dnrBlockRuleId = dnrBlockRuleId;
+
+                    if (globalStrictMode) {
+                        await addDnrBlockingRule(url.hostname, dnrBlockRuleId).catch(err => {
+                            console.warn("DNR add rule failed for", url.hostname, err);
+                        });
+                    }
+                }
+
+                databaseAdapter.update(first.requestId, requestDBEntry);
+            }
+
         } else {
             console.log("DEBUG: This hostname was not registered before. Attempting to register...")
 
@@ -122,7 +146,7 @@ function onHeadersReceived(details) {
 
         // we do not use { cancel: true } here but redirect another time to make sure
         // the target domain is listed as block and not the skip proxy address
-        return { redirectUrl: targetUrl.toString() };
+        return {redirectUrl: targetUrl.toString()};
     }
 }
 

@@ -4,7 +4,7 @@
 import {fetchAndApplyScionPAC, loadProxySettings} from "./background_helpers/proxy_handler.js";
 import {allowAllgeofence, geofence, resetPolicyCookie} from "./background_helpers/geofence_handler.js";
 import {getStorageValue, saveStorageValue} from "./shared/storage.js";
-import {initializeDnr} from "./background_helpers/dnr_handler.js";
+import {initializeDnr, reAddAllDnrBlockRules, removeAllDnrBlockRules} from "./background_helpers/dnr_handler.js";
 import {initializeRequestInterceptionListeners, resetKnownHostnames} from "./background_helpers/request_interception_handler.js";
 import {initializeTabListeners} from "./background_helpers/tab_handler.js";
 
@@ -58,25 +58,41 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 
 /*--- storage ----------------------------------------------------------------*/
 
-chrome.storage.onChanged.addListener((changes, namespace) => {
+chrome.storage.onChanged.addListener(async (changes, namespace) => {
     // In case we disable running for the extension, lets put an empty set for now
     // Later, we could remove the PAC script, but doesn't impact us now...
-    if (namespace == 'sync' && changes.extension_running?.newValue !== undefined) {
-        updateRunningIcon(changes.extension_running.newValue);
-    } else if (namespace == 'sync' && changes.isd_whitelist?.newValue) {
-        geofence(changes.isd_whitelist.newValue);
-    } else if (namespace == 'sync' && changes.perSiteStrictMode?.newValue !== undefined) {
-        perSiteStrictMode = changes.perSiteStrictMode?.newValue;
-    } else if (namespace == 'sync' && changes.globalStrictMode?.newValue !== undefined) {
-        globalStrictMode = changes.globalStrictMode?.newValue;
-    } else if (namespace == 'sync' && changes.isd_all?.newValue !== undefined) {
-        allowAllgeofence(changes.isd_all.newValue);
-    } else if (namespace === 'sync' && (changes.proxyScheme || changes.proxyHost || changes.proxyPort)) {
-        // Reload all proxy settings if any changed
-        loadProxySettings();
+    if (namespace == "sync") {
+        if (changes.extension_running?.newValue !== undefined) {
 
-        resetKnownHostnames()
-        resetPolicyCookie()
+            updateRunningIcon(changes.extension_running.newValue);
+
+        } else if (changes.isd_whitelist?.newValue) {
+
+            geofence(changes.isd_whitelist.newValue);
+
+        } else if (changes.perSiteStrictMode?.newValue !== undefined) {
+
+            perSiteStrictMode = changes.perSiteStrictMode?.newValue;
+
+        } else if (changes.globalStrictMode?.newValue !== undefined) {
+
+            globalStrictMode = changes.globalStrictMode?.newValue;
+
+            // update DNR block rules
+            if (globalStrictMode) await reAddAllDnrBlockRules()
+            else await removeAllDnrBlockRules()
+
+        } else if (changes.isd_all?.newValue !== undefined) {
+
+            allowAllgeofence(changes.isd_all.newValue);
+
+        } else if (namespace === 'sync' && (changes.proxyScheme || changes.proxyHost || changes.proxyPort)) {
+            // Reload all proxy settings if any changed
+            loadProxySettings();
+
+            resetKnownHostnames()
+            resetPolicyCookie()
+        }
     }
 })
 
