@@ -69,10 +69,12 @@ export async function removeAllDnrBlockRules(customRulesToRemoveIds = null) {
     let rulesToRemoveIds;
     if (customRulesToRemoveIds !== null) rulesToRemoveIds = customRulesToRemoveIds;
     else {
-        const databaseAdapter = await getRequestsDatabaseAdapter();
-        const requestsNonScion = await databaseAdapter.get({scionEnabled: false}, false);
-        rulesToRemoveIds = requestsNonScion.map(entry => entry.dnrBlockRuleId);
+        // get all currently active rules and assign them to be removed
+        const currentRules = await chrome.declarativeNetRequest.getDynamicRules()
+        rulesToRemoveIds = currentRules.map(rule => rule.id);
     }
+
+    if (!rulesToRemoveIds || rulesToRemoveIds.length === 0) return;
 
     await chrome.declarativeNetRequest.updateDynamicRules({addRules: [], removeRuleIds: rulesToRemoveIds});
 }
