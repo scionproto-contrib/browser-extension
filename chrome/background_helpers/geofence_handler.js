@@ -1,12 +1,7 @@
 import {getStorageValue} from "../shared/storage.js";
-import {DEFAULT_PROXY_HOST, HTTPS_PROXY_PORT, HTTPS_PROXY_SCHEME} from "./proxy_handler.js";
+import {proxyAddress, proxyHost, proxyPolicyPath, proxyScheme} from "./proxy_handler.js";
 
-const proxyPolicyPath = "/policy"
-
-let proxyScheme = HTTPS_PROXY_SCHEME;
 export let policyCookie = null;
-export let proxyHost = DEFAULT_PROXY_HOST;
-export let proxyAddress = `${proxyScheme}://${proxyHost}:${HTTPS_PROXY_PORT}`;
 
 export function resetPolicyCookie() { policyCookie = null; }
 

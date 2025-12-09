@@ -6,10 +6,13 @@ import {policyCookie} from "./geofence_handler.js";
 
 let isHostnameSCION = {};
 
+/**
+ * General request interception concept:
+ * - hosts unknown to the extension are forwarded to the proxy
+ * - the proxy returns either a 503 if the host is not SCION-capable or a 301 (redirect to the resource) otherwise
+ * - this return value can be detected and intercepted in the `onHeadersReceived` function
+ */
 export function initializeRequestInterceptionListeners() {
-    // Request intercepting (see https://developer.chrome.com/docs/extensions/reference/api/webRequest#type-BlockingResponse)
-    // chrome.webRequest.onBeforeRequest.addListener(onBeforeRequest, {urls: ["<all_urls>"]});
-
     chrome.webRequest.onHeadersReceived.addListener(onHeadersReceived, {urls: ["<all_urls>"]});
 
     // in manifest version 3 (MV3), the onAuthRequired is the only listener that still supports and accepts the 'blocking' extraInfoSpec

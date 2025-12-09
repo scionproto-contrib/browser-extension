@@ -1,17 +1,19 @@
-export const HTTPS_PROXY_SCHEME = "https"
-export const HTTP_PROXY_SCHEME = "http"
-export const DEFAULT_PROXY_HOST = "forward-proxy.scion.ethz.ch";
-export const HTTPS_PROXY_PORT = "9443";
-export const HTTP_PROXY_PORT = "9080";
+const HTTPS_PROXY_SCHEME = "https"
+const HTTP_PROXY_SCHEME = "http"
+const DEFAULT_PROXY_HOST = "forward-proxy.scion.ethz.ch";
+const HTTPS_PROXY_PORT = "9443";
+const HTTP_PROXY_PORT = "9080";
 
 export const proxyHealthCheckPath = "/health"
 export const proxyHostResolvePath = "/resolve"
 export const proxyHostResolveParam = "host"
 export const proxyURLResolvePath = "/redirect"
+export const proxyURLResolveParam = "url";
+export const proxyPolicyPath = "/policy"
 
-let proxyScheme = HTTPS_PROXY_SCHEME;
+export let proxyScheme = HTTPS_PROXY_SCHEME;
 export let proxyHost = DEFAULT_PROXY_HOST;
-let proxyPort = HTTPS_PROXY_PORT;
+export let proxyPort = HTTPS_PROXY_PORT;
 export let proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
 
 export const WPAD_URL = `http://wpad/wpad_scion.dat`;
@@ -61,7 +63,7 @@ function parseProxyFromPAC(pacScript) {
             return null;
         }
         return {
-            proxyScheme: "https",
+            proxyScheme: HTTPS_PROXY_SCHEME,
             proxyHost: httpsProxyMatch[1],
             proxyPort: httpsProxyMatch[2]
         };
@@ -71,7 +73,7 @@ function parseProxyFromPAC(pacScript) {
             return null;
         }
         return {
-            proxyScheme: "http",
+            proxyScheme: HTTP_PROXY_SCHEME,
             proxyHost: httpProxyMatch[1],
             proxyPort: httpProxyMatch[2]
         };

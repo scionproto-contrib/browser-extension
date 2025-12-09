@@ -1,6 +1,6 @@
 import {getStorageValue, saveStorageValue} from "../shared/storage.js";
 import {getRequestsDatabaseAdapter} from "../database.js";
-import {WPAD_URL} from "./proxy_handler.js";
+import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD_URL} from "./proxy_handler.js";
 
 // sufficiently high to have space for custom allow/deny rules
 const SUBRESOURCES_REDIRECT_RULE_ID = 1;
@@ -22,6 +22,22 @@ function withLock(fn) {
     return p;
 }
 
+/**
+ * Initializes the DNR handler.
+ *
+ * General DNR strategy:
+ * - all `main_frame` resources are forwarded to a `checking.html` page where the extension
+ * can asynchronously verify whether the host is SCION capable. If it is, redirect to that
+ * resource, otherwise show a blocking-page
+ * - all other sub-resources are forwarded to the `/redirect` endpoint of the proxy and then
+ * handled by the `onHeadersReceived` function that, based on the returned statuscode, determines
+ * whether the host was scion capable (to prevent future requests from going to the proxy again)
+ * - for all hosts known to the extension, a DNR rule with higher priority is installed to
+ * override the generic redirect rules mentioned above, thus preventing proxy lookup loops (a
+ * hypothetical lookup loop example that assumes `example.com` is SCION-capable: user enters
+ * `example.com`, redirected to the proxy => proxy redirects to `example.com` => again redirected
+ * to the proxy etc.)
+ */
 export async function initializeDnr(globalStrictMode) {
     console.log("Initializing DNR");
 
@@ -37,6 +53,7 @@ export async function initializeDnr(globalStrictMode) {
 }
 
 export async function setGlobalStrictMode(globalStrictMode) {
+    await removeAllDnrBlockRules();
     if (globalStrictMode) {
         await chrome.declarativeNetRequest.updateDynamicRules({
             addRules: [createSubResourcesRedirectRule(SUBRESOURCES_REDIRECT_RULE_ID)],
@@ -44,8 +61,6 @@ export async function setGlobalStrictMode(globalStrictMode) {
         });
 
         // TODO: additionally, also add higher-priority rules for those hosts already known through storage
-    } else {
-        await removeAllDnrBlockRules();
     }
 }
 
@@ -58,14 +73,14 @@ function createSubResourcesRedirectRule(id) {
             type: 'redirect',
             redirect: {
                 // Match entire URL and stick it behind a hash
-                regexSubstitution:  'https://forward-proxy.scion.ethz.ch:9443/redirect?url=\\0',
+                regexSubstitution:  `${proxyAddress}${proxyURLResolvePath}?${proxyURLResolveParam}=\\0`,
             },
         },
         condition: {
             regexFilter: '^.+$',         // match any URL (or restrict to https? if you want)
             resourceTypes: SUBRESOURCE_TYPES,
             excludedRequestDomains: [
-                "forward-proxy.scion.ethz.ch",
+                proxyHost,
                 WPAD_URL,
             ],
         },
