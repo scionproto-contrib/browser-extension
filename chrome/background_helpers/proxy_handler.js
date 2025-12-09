@@ -14,6 +14,8 @@ export let proxyHost = DEFAULT_PROXY_HOST;
 let proxyPort = HTTPS_PROXY_PORT;
 export let proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
 
+export const WPAD_URL = `http://wpad/wpad_scion.dat`;
+
 export function initializeProxyHandler() {
     // Load saved configuration at startup
     chrome.storage.sync.get({ autoProxyConfig: true }, ({ autoProxyConfig }) => {
@@ -86,7 +88,7 @@ function isValidPort(port) {
 }
 
 function fetchAndApplyScionPAC() {
-    fetch(`http://wpad/wpad_scion.dat`)
+    fetch(WPAD_URL)
         .then(response => {
             if (!response.ok) {
                 throw new Error(`Retrieving PAC config; status: ${response.status}`);

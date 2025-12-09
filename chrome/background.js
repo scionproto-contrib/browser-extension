@@ -4,7 +4,7 @@
 import {initializeProxyHandler, loadProxySettings} from "./background_helpers/proxy_handler.js";
 import {allowAllgeofence, geofence, resetPolicyCookie} from "./background_helpers/geofence_handler.js";
 import {getStorageValue, saveStorageValue} from "./shared/storage.js";
-import {initializeDnr, reAddAllDnrBlockRules, removeAllDnrBlockRules} from "./background_helpers/dnr_handler.js";
+import {initializeDnr, setGlobalStrictMode} from "./background_helpers/dnr_handler.js";
 import {initializeRequestInterceptionListeners, resetKnownHostnames} from "./background_helpers/request_interception_handler.js";
 import {initializeTabListeners} from "./background_helpers/tab_handler.js";
 
@@ -33,8 +33,8 @@ getStorageValue('perSiteStrictMode').then((val) => {
     perSiteStrictMode = val || {}; // Here we may get undefined which is bad
 });
 // Do icon setup etc at startup
-getStorageValue('extension_running').then(extensionRunning => {
-    updateRunningIcon(extensionRunning);
+getStorageValue('extension_running').then(async extensionRunning => {
+    await updateRunningIcon(extensionRunning);
 });
 
 
@@ -50,7 +50,7 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
     if (namespace == "sync") {
         if (changes.extension_running?.newValue !== undefined) {
 
-            updateRunningIcon(changes.extension_running.newValue);
+            await updateRunningIcon(changes.extension_running.newValue);
 
         } else if (changes.isd_whitelist?.newValue) {
 
@@ -65,8 +65,7 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
             globalStrictMode = changes.globalStrictMode?.newValue;
 
             // update DNR block rules
-            if (globalStrictMode) await reAddAllDnrBlockRules()
-            else await removeAllDnrBlockRules()
+            await setGlobalStrictMode(globalStrictMode);
 
         } else if (changes.isd_all?.newValue !== undefined) {
 
@@ -83,11 +82,11 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
 })
 
 // Changes icon depending on the extension is running or not
-function updateRunningIcon(extensionRunning) {
+async function updateRunningIcon(extensionRunning) {
     if (extensionRunning) {
-        chrome.action.setIcon({ path: "/images/scion-38.jpg" });
+        await chrome.action.setIcon({ path: "/images/scion-38.jpg" });
     } else {
-        chrome.action.setIcon({ path: "/images/scion-38_disabled.jpg" });
+        await chrome.action.setIcon({ path: "/images/scion-38_disabled.jpg" });
     }
 }
 

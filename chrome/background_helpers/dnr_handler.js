@@ -1,11 +1,14 @@
 import {getStorageValue, saveStorageValue} from "../shared/storage.js";
 import {getRequestsDatabaseAdapter} from "../database.js";
+import {WPAD_URL} from "./proxy_handler.js";
 
 // sufficiently high to have space for custom allow/deny rules
+const SUBRESOURCES_REDIRECT_RULE_ID = 1;
 const BLOCK_RULE_START_ID = 10000;
 const NextDnrRuleId = "nextDnrRuleId"
 
 const ALL_RESOURCE_TYPES = ["main_frame", "sub_frame", "xmlhttprequest", "script", "image", "font", "media", "stylesheet", "object", "other", "ping", "websocket", "webtransport"];
+const SUBRESOURCE_TYPES = ["sub_frame", "xmlhttprequest", "script", "image", "font", "media", "stylesheet", "object", "other", "ping", "websocket", "webtransport"];
 
 // lock to prevent interleavings when generating block rule IDs since access to sync storage is async
 let idLock = Promise.resolve();
@@ -28,10 +31,45 @@ export async function initializeDnr(globalStrictMode) {
         await saveStorageValue(NextDnrRuleId, BLOCK_RULE_START_ID);
     }
 
-    if (globalStrictMode) await reAddAllDnrBlockRules()
-    else await removeAllDnrBlockRules()
+    await setGlobalStrictMode(globalStrictMode);
 
     // TODO: add selective DNR rules for pages that were specifically set to 'strict' by the user
+}
+
+export async function setGlobalStrictMode(globalStrictMode) {
+    if (globalStrictMode) {
+        await chrome.declarativeNetRequest.updateDynamicRules({
+            addRules: [createSubResourcesRedirectRule(SUBRESOURCES_REDIRECT_RULE_ID)],
+            removeRuleIds: []
+        });
+
+        // TODO: additionally, also add higher-priority rules for those hosts already known through storage
+    } else {
+        await removeAllDnrBlockRules();
+    }
+}
+
+// Redirect all sub-resource requests to checking.html
+function createSubResourcesRedirectRule(id) {
+    return {
+        id,
+        priority: 1,
+        action: {
+            type: 'redirect',
+            redirect: {
+                // Match entire URL and stick it behind a hash
+                regexSubstitution:  'https://forward-proxy.scion.ethz.ch:9443/redirect?url=\\0',
+            },
+        },
+        condition: {
+            regexFilter: '^.+$',         // match any URL (or restrict to https? if you want)
+            resourceTypes: SUBRESOURCE_TYPES,
+            excludedRequestDomains: [
+                "forward-proxy.scion.ethz.ch",
+                WPAD_URL,
+            ],
+        },
+    };
 }
 
 /**
@@ -44,6 +82,10 @@ export async function initializeDnr(globalStrictMode) {
  */
 export async function addDnrBlockingRule(host, id) {
     const rule = createBlockRule(host, id)
+    await chrome.declarativeNetRequest.updateDynamicRules({addRules: [rule], removeRuleIds: []})
+}
+export async function addDnrAllowRule(host, id) {
+    const rule = createAllowRule(host, id)
     await chrome.declarativeNetRequest.updateDynamicRules({addRules: [rule], removeRuleIds: []})
 }
 
@@ -99,6 +141,18 @@ function createBlockRule(host, id) {
             resourceTypes: ALL_RESOURCE_TYPES
         }
     };
+}
+
+function createAllowRule(host, id) {
+    return {
+        id,
+        priority: 100,
+        action: {type: 'allow'},
+        condition: {
+            requestDomains: [host],
+            resourceTypes: ALL_RESOURCE_TYPES
+        }
+    }
 }
 
 /**

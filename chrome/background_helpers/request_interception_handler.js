@@ -1,6 +1,6 @@
 import {proxyAddress, proxyHost, proxyHostResolveParam, proxyHostResolvePath, proxyURLResolvePath} from "./proxy_handler.js";
 import {getRequestsDatabaseAdapter} from "../database.js";
-import {addDnrBlockingRule, fetchNextDnrRuleId} from "./dnr_handler.js";
+import {addDnrAllowRule, addDnrBlockingRule, fetchNextDnrRuleId} from "./dnr_handler.js";
 import {globalStrictMode} from "../background.js";
 import {policyCookie} from "./geofence_handler.js";
 
@@ -8,7 +8,7 @@ let isHostnameSCION = {};
 
 export function initializeRequestInterceptionListeners() {
     // Request intercepting (see https://developer.chrome.com/docs/extensions/reference/api/webRequest#type-BlockingResponse)
-    chrome.webRequest.onBeforeRequest.addListener(onBeforeRequest, {urls: ["<all_urls>"]});
+    // chrome.webRequest.onBeforeRequest.addListener(onBeforeRequest, {urls: ["<all_urls>"]});
 
     chrome.webRequest.onHeadersReceived.addListener(onHeadersReceived, {urls: ["<all_urls>"]});
 
@@ -57,7 +57,7 @@ function onBeforeRequest(requestInfo) {
 
         // If we don't have any information about scion-enabled or not
         if (url.hostname in isHostnameSCION) {
-            console.log(`Host ${url.hostname} is known to be ${isHostnameSCION[url.hostname] ? "" : "non-"}SCION. Canceling resolve of hostname via proxy.`);
+            // console.log(`Host ${url.hostname} is known to be ${isHostnameSCION[url.hostname] ? "" : "non-"}SCION. Canceling resolve of hostname via proxy.`);
             requestDBEntry.scionEnabled = isHostnameSCION[url.hostname];
             const first = databaseAdapter.first({
                 mainDomain: requestDBEntry.mainDomain,
@@ -89,6 +89,11 @@ function onBeforeRequest(requestInfo) {
         } else {
             console.log("DEBUG: This hostname was not registered before. Attempting to register...")
 
+            const redirectUrl = `https://forward-proxy.scion.ethz.ch:9443${proxyURLResolvePath}?url=${requestInfo.url}`
+            fetch(redirectUrl, {method: "GET"}).then(response => {
+                console.log(`[onBeforeRequest]: Response for url [${redirectUrl}]:`, response);
+            });
+            return
             const fetchUrl = `${proxyAddress}${proxyHostResolvePath}?${proxyHostResolveParam}=${url.hostname}`
             fetch(fetchUrl, {method: "GET"}).then(response => {
                 if (response.status === 200) {
@@ -133,20 +138,25 @@ function onBeforeRequest(requestInfo) {
 
 // Skip answers on a resolve request with a status code 500 if the host is not scion capable
 function onHeadersReceived(details) {
-    if (details.url.startsWith(`${proxyAddress}${proxyURLResolvePath}`) && details.statusCode >= 500) {
-        console.log("<onHeadersReceived> Error: ", details.url);
-        console.log(details);
-
+    console.log("[onHeadersReceived]: ", details);
+    if (details.url.startsWith(`${proxyAddress}${proxyURLResolvePath}`)) {
         const url = new URL(details.url);
         // The actual URL that we need is in ?url=$url
         const target = url.search.split("=")[1];
         const targetUrl = new URL(target);
-        isHostnameSCION[targetUrl.hostname] = true;
-        console.log("<onHeadersReceived> known NON scion (after resolve): ", targetUrl.hostname)
 
-        // we do not use { cancel: true } here but redirect another time to make sure
-        // the target domain is listed as block and not the skip proxy address
-        return {redirectUrl: targetUrl.toString()};
+        if (details.statusCode >= 500) {
+            isHostnameSCION[targetUrl.hostname] = true;
+            fetchNextDnrRuleId().then(id => {
+                addDnrBlockingRule(targetUrl.hostname, id)
+            })
+            console.log("<onHeadersReceived> known NON scion (after resolve): ", targetUrl.hostname)
+
+        } else if (details.statusCode === 301) {
+            fetchNextDnrRuleId().then(id => {
+                addDnrAllowRule(targetUrl.hostname, id)
+            })
+        }
     }
 }
 
@@ -183,5 +193,5 @@ function onBeforeRedirect(details) {
 }
 
 function onErrorOccurred(details) {
-    console.log("<onErrorOccurred>", details);
+    console.error("<onErrorOccurred>", details);
 }
