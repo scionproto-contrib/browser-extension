@@ -2,12 +2,32 @@ import {getStorageValue, saveStorageValue} from "../shared/storage.js";
 import {getRequestsDatabaseAdapter} from "../database.js";
 import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD_URL} from "./proxy_handler.js";
 
-// sufficiently high to have space for custom allow/deny rules
-const SUBRESOURCES_REDIRECT_RULE_ID = 1;
+/*
+General DNR (DeclarativeNetRequest) strategy:
+ - all `main_frame` resources are forwarded to a `checking.html` page where the extension
+    can asynchronously verify whether the host is SCION capable. If it is, redirect to that
+    resource, otherwise show a blocking-page
+ - all other sub-resources are forwarded to the `/redirect` endpoint of the proxy and then
+    handled by the `onHeadersReceived` function that, based on the returned statuscode, determines
+    whether the host was scion capable (to prevent future requests from going to the proxy again)
+ - for all hosts known to the extension, a DNR rule with higher priority is installed to
+    override the generic redirect rules mentioned above, thus preventing proxy lookup loops (a
+    hypothetical lookup loop example that assumes `example.com` is SCION-capable: user enters
+    `example.com`, redirected to the proxy => proxy redirects to `example.com` => again redirected
+    to the proxy etc.)
+ */
+
+// custom DNR rules
+const MAIN_FRAME_REDIRECT_RULE_ID = 1;
+const SUBRESOURCES_REDIRECT_RULE_ID = 2;
+
+// sufficiently high to have space for custom DNR rules (specified above)
 const BLOCK_RULE_START_ID = 10000;
 const NextDnrRuleId = "nextDnrRuleId"
 
+const EXT_PAGE = chrome.runtime.getURL('/checking.html');
 const ALL_RESOURCE_TYPES = ["main_frame", "sub_frame", "xmlhttprequest", "script", "image", "font", "media", "stylesheet", "object", "other", "ping", "websocket", "webtransport"];
+const MAIN_FRAME_TYPE = ["main_frame"];
 const SUBRESOURCE_TYPES = ["sub_frame", "xmlhttprequest", "script", "image", "font", "media", "stylesheet", "object", "other", "ping", "websocket", "webtransport"];
 
 // lock to prevent interleavings when generating block rule IDs since access to sync storage is async
@@ -24,19 +44,6 @@ function withLock(fn) {
 
 /**
  * Initializes the DNR handler.
- *
- * General DNR strategy:
- * - all `main_frame` resources are forwarded to a `checking.html` page where the extension
- * can asynchronously verify whether the host is SCION capable. If it is, redirect to that
- * resource, otherwise show a blocking-page
- * - all other sub-resources are forwarded to the `/redirect` endpoint of the proxy and then
- * handled by the `onHeadersReceived` function that, based on the returned statuscode, determines
- * whether the host was scion capable (to prevent future requests from going to the proxy again)
- * - for all hosts known to the extension, a DNR rule with higher priority is installed to
- * override the generic redirect rules mentioned above, thus preventing proxy lookup loops (a
- * hypothetical lookup loop example that assumes `example.com` is SCION-capable: user enters
- * `example.com`, redirected to the proxy => proxy redirects to `example.com` => again redirected
- * to the proxy etc.)
  */
 export async function initializeDnr(globalStrictMode) {
     console.log("Initializing DNR");
@@ -52,11 +59,18 @@ export async function initializeDnr(globalStrictMode) {
     // TODO: add selective DNR rules for pages that were specifically set to 'strict' by the user
 }
 
+/**
+ * Function that enforces the global strict mode based on the boolean value passed in `globalStrictMode` by
+ * installing DNR rules.
+ */
 export async function setGlobalStrictMode(globalStrictMode) {
     await removeAllDnrBlockRules();
     if (globalStrictMode) {
         await chrome.declarativeNetRequest.updateDynamicRules({
-            addRules: [createSubResourcesRedirectRule(SUBRESOURCES_REDIRECT_RULE_ID)],
+            addRules: [
+                createMainFrameRedirectRule(MAIN_FRAME_REDIRECT_RULE_ID),
+                createSubResourcesRedirectRule(SUBRESOURCES_REDIRECT_RULE_ID),
+            ],
             removeRuleIds: []
         });
 
@@ -64,7 +78,30 @@ export async function setGlobalStrictMode(globalStrictMode) {
     }
 }
 
-// Redirect all sub-resource requests to checking.html
+/**
+ * Returns a DNR rule that redirects all `main_frame` requests to the `checking.html` page for a synchronous blocking lookup.
+ */
+function createMainFrameRedirectRule(id) {
+    return {
+        id,
+        priority: 1,
+        action: {
+            type: 'redirect',
+            redirect: {
+                // match entire URL and append it to a hash (separator character expected by checking.js)
+                regexSubstitution: EXT_PAGE + '#\\0',
+            },
+        },
+        condition: {
+            regexFilter: '^.+$', // match any URL
+            resourceTypes: MAIN_FRAME_TYPE
+        }
+    };
+}
+
+/**
+ * Returns a DNR rule that redirects all sub-resources to the proxy `/redirect` endpoint.
+ */
 function createSubResourcesRedirectRule(id) {
     return {
         id,
@@ -77,7 +114,7 @@ function createSubResourcesRedirectRule(id) {
             },
         },
         condition: {
-            regexFilter: '^.+$',         // match any URL (or restrict to https? if you want)
+            regexFilter: '^.+$', // match any URL
             resourceTypes: SUBRESOURCE_TYPES,
             excludedRequestDomains: [
                 proxyHost,
