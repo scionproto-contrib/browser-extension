@@ -28,70 +28,59 @@ export function resetKnownHostnames() {
 }
 
 export async function isHostScion(hostname, currentTabId) {
-    const databaseAdapter = await getRequestsDatabaseAdapter();
-
-    const dnrRuleId = await fetchNextDnrRuleId();
-    const requestDBEntry = {
-        requestId: dnrRuleId,
-        tabId: currentTabId,
-        domain: hostname,
-        mainDomain: hostname,
-        scionEnabled: false,
-        dnrRuleId: dnrRuleId, // set it to -1 by default (stays -1 for scion-enabled domains, otherwise gets assigned a proper rule id)
-    };
+    let scionEnabled = false;
 
     const fetchUrl = `${proxyAddress}${proxyHostResolvePath}?${proxyHostResolveParam}=${hostname}`;
     const response = await fetch(fetchUrl, {method: "GET"});
     if (response.ok) {
         const text = await response.text();
-        if (text !== "") {
-            requestDBEntry.scionEnabled = true;
-            isHostnameSCION[hostname] = true;
-            console.log("[DB]: scion enabled (after resolve): ", hostname);
+        // the response text contains the SCION ISD path, or an empty string if the host is not
+        // reachable through SCION
+        scionEnabled = text !== "";
+        isHostnameSCION[hostname] = scionEnabled;
 
-            // TODO: expand condition to also check for perPageStrictMode
-            if (globalStrictMode) await addDnrAllowRule(hostname, dnrRuleId);
-        } else {
-            requestDBEntry.scionEnabled = false;
-            isHostnameSCION[hostname] = false;
-            console.log("[DB]: scion disabled (after resolve): ", hostname);
+        // logging
+        if (scionEnabled) console.log("[DB]: scion enabled (after resolve): ", hostname);
+        else console.log("[DB]: scion disabled (after resolve): ", hostname);
 
-            // TODO: expand condition to also check for perPageStrictMode
-            if (globalStrictMode) await addDnrBlockingRule(hostname, dnrRuleId);
-        }
-        databaseAdapter.add(requestDBEntry, {
-            mainDomain: requestDBEntry.mainDomain,
-            scionEnabled: requestDBEntry.scionEnabled,
-            domain: requestDBEntry.domain,
-        });
+        const dnrRuleId = await createDBEntry(hostname, currentTabId, scionEnabled);
+        await handleAddDnrRule(hostname, dnrRuleId, scionEnabled);
     } else {
         console.warn("[DB]: Resolution error: ", response.status);
     }
 
-    console.log("[DB]: Resolution returned that host is scion-capable: ", requestDBEntry.scionEnabled);
-    return requestDBEntry.scionEnabled;
+    console.log("[DB]: Resolution returned that host is scion-capable: ", scionEnabled);
+    return scionEnabled;
 }
 
 // Skip answers on a resolve request with a status code 500 if the host is not scion capable
 function onHeadersReceived(details) {
     if (details.url.startsWith(`${proxyAddress}${proxyURLResolvePath}`)) {
-        console.log("[onHeadersReceived]: ", details);
         const url = new URL(details.url);
-        // The actual URL that we need is in ?url=$url
+        // the actual URL that we need is in ?url=$url
         const target = url.search.split("=")[1];
         const targetUrl = new URL(target);
 
-        if (details.statusCode >= 500) {
-            isHostnameSCION[targetUrl.hostname] = true;
-            fetchNextDnrRuleId().then(id => {
-                addDnrBlockingRule(targetUrl.hostname, id)
-            })
-            console.log("<onHeadersReceived> known NON scion (after resolve): ", targetUrl.hostname)
+        // the proxy is expected to return a 503 if the host is not SCION-capable and 301 (redirect) otherwise
+        if (details.statusCode < 500 && details.statusCode !== 301) {
+            console.error(`[onHeadersReceived]: Got an unexpected result from the proxy for host ${targetUrl.hostname}: `, details);
+            return;
+        }
 
-        } else if (details.statusCode === 301) {
-            fetchNextDnrRuleId().then(id => {
-                addDnrAllowRule(targetUrl.hostname, id)
-            })
+        let scionEnabled = details.statusCode === 301;
+
+        // logging
+        if (scionEnabled) console.log("[onHeadersReceived]: scion enabled (after resolve): ", targetUrl.hostname);
+        else console.log("[onHeadersReceived]: scion disabled (after resolve): ", targetUrl.hostname);
+
+        isHostnameSCION[targetUrl.hostname] = scionEnabled;
+        asyncHelper().catch(reason => {
+            console.error("[onHeadersReceived]: An error occurred during the creation of the DB entry or DNR rule: ", reason);
+        });
+
+        async function asyncHelper() {
+            const dnrRuleId = await createDBEntry(targetUrl.hostname, details.tabId, scionEnabled);
+            await handleAddDnrRule(targetUrl.hostname, dnrRuleId, scionEnabled);
         }
     }
 }
@@ -130,4 +119,40 @@ function onBeforeRedirect(details) {
 
 function onErrorOccurred(details) {
     console.error("<onErrorOccurred>", details);
+}
+
+/**
+ * Creates a DB entry for the provided `host` and returns the generated `dnrRuleId`.
+ */
+async function createDBEntry(hostname, currentTabId, scionEnabled) {
+    const dnrRuleId = await fetchNextDnrRuleId();
+    const requestDBEntry = {
+        requestId: dnrRuleId,
+        tabId: currentTabId,
+        domain: hostname,
+        mainDomain: hostname,
+        scionEnabled: scionEnabled,
+        dnrRuleId: dnrRuleId, // set it to -1 by default (stays -1 for scion-enabled domains, otherwise gets assigned a proper rule id)
+    };
+
+    const databaseAdapter = await getRequestsDatabaseAdapter();
+    databaseAdapter.add(requestDBEntry, {
+        mainDomain: requestDBEntry.mainDomain,
+        scionEnabled: requestDBEntry.scionEnabled,
+        domain: requestDBEntry.domain,
+    });
+
+    return dnrRuleId;
+}
+
+/**
+ * Checks whether `globalStrictMode` or `perSiteStrictMode` for the provided `hostname` are enabled and,
+ * if either is true, adds the rule depending on whether `scionEnabled` for this host.
+ */
+async function handleAddDnrRule(hostname, dnrRuleId, scionEnabled) {
+    // TODO: expand condition to also check for perPageStrictMode
+    if (globalStrictMode) {
+        if (scionEnabled) await addDnrAllowRule(hostname, dnrRuleId);
+        else await addDnrBlockingRule(hostname, dnrRuleId);
+    }
 }

@@ -44,6 +44,8 @@ function withLock(fn) {
 
 /**
  * Initializes the DNR handler.
+ *
+ * Note that since this function is called from the service worker and these are ephemeral in MV3, this function will be called quite often (e.g. when the user opens a new tab).
  */
 export async function initializeDnr(globalStrictMode) {
     console.log("Initializing DNR");
@@ -54,6 +56,7 @@ export async function initializeDnr(globalStrictMode) {
         await saveStorageValue(NextDnrRuleId, BLOCK_RULE_START_ID);
     }
 
+    // TODO: due to the ephemerality of the service workers, the following line will always remove all, then re-add all rules (very inefficient)
     await setGlobalStrictMode(globalStrictMode);
 
     // TODO: add selective DNR rules for pages that were specifically set to 'strict' by the user

@@ -26,24 +26,10 @@ const save = async () => {
     await saveStorageValue("requests", JSON.stringify(root.database));
 }
 
-function debounce(func, timeout = 500) {
-    let timer;
-    return (...args) => {
-        clearTimeout(timer);
-        timer = setTimeout(() => { func.apply(this, args); }, timeout);
-    };
-}
-
 class DatabaseAdapter {
 
     constructor(table) {
         this.table = table;
-    }
-
-    persist = () => {
-        return debounce(() => {
-            save();
-        })
     }
 
     // This part was the reason for missing SCION domain indicators.
@@ -56,8 +42,9 @@ class DatabaseAdapter {
     // every time the popup opens, which means it needs to fetch the
     // resources from storage, by passing loadFromStorage=true
     get = (filter, loadFromStorage) => {
-        return new Promise(resolve => {
-            const run = () => {
+        return new Promise(async resolve => {
+            const run = async () => {
+                await load();
                 let filtered = root.database[this.table] || [];
                 Object.keys(filter || {}).forEach((key) => {
                     filtered = filtered.filter(r => r[key] === filter[key]);
@@ -68,13 +55,14 @@ class DatabaseAdapter {
             if (loadFromStorage) {
                 load().then(run);
             } else {
-                run();
+                await run();
             }
         });
     }
 
     first = (filter) => {
-        return new Promise(resolve => {
+        return new Promise(async resolve => {
+            await load();
             let filtered = root.database[this.table] || [];
             Object.keys(filter || {}).forEach((key) => {
                 filtered = filtered.filter(r => r[key] === filter[key]);
@@ -85,7 +73,11 @@ class DatabaseAdapter {
 
     // replaceFilter: if provided, update matching entry instead of pushing a new one
     add = (entry, replaceFilter) => {
-        return new Promise(resolve => {
+        return new Promise(async resolve => {
+
+            // TODO: this works for now, determine whether there is a more efficient way of doing this instead of accessing sync storage for every entry to be added...
+            // TODO: but why is this needed, given the load() call in the getRequestsDatabaseAdapter???
+            await load();
             // keep list small (sync storage quota)
             const list = root.database[this.table] || (root.database[this.table] = []);
             while (list.length > 50) {
@@ -110,21 +102,21 @@ class DatabaseAdapter {
                 list.push(entry);
             }
 
-            const persist = this.persist();
-            persist();
+            await save()
             resolve(entry);
         });
     }
 
     update = (requestId, newEntry) => {
-        return new Promise(resolve => {
+        return new Promise(async resolve => {
+            await load();
             const list = root.database[this.table] || (root.database[this.table] = []);
             const entryIndex = list.findIndex(r => r.requestId === requestId);
             if (entryIndex >= 0) {
                 const updated = { ...list[entryIndex], ...newEntry };
                 list[entryIndex] = updated;
-                const persist = this.persist();
-                persist();
+
+                await save()
                 resolve(updated);
             } else {
                 resolve(null);
@@ -133,8 +125,13 @@ class DatabaseAdapter {
     }
 }
 
+// using this variable to detect if the service worker got torn down and rebuilt, thus requiring a reload from storage
+let currentDbInstance = null;
+
 export const getRequestsDatabaseAdapter = () => {
-    return new Promise((resolve) => {
-        resolve(new DatabaseAdapter("requests"));
-    });
+    if (!currentDbInstance) {
+        currentDbInstance = load().catch(() => {});
+    }
+
+    return currentDbInstance.then(() => new DatabaseAdapter("requests"));
 }
