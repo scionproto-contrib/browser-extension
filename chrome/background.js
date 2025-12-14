@@ -17,7 +17,7 @@ let perSiteStrictMode = {};
 
 /*--- setup ------------------------------------------------------------------*/
 
-getStorageValue(GLOBAL_STRICT_MODE).then( async(syncGlobalStrictMode) => {
+getStorageValue(GLOBAL_STRICT_MODE).then(async (syncGlobalStrictMode) => {
     console.log("globalStrictMode: value in sync storage is set to", syncGlobalStrictMode);
     if (!syncGlobalStrictMode) {
         console.log("globalStrictMode: thus setting globalStrictMode to", globalStrictMode);
@@ -84,9 +84,9 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
 // Changes icon depending on the extension is running or not
 async function updateRunningIcon(extensionRunning) {
     if (extensionRunning) {
-        await chrome.action.setIcon({ path: "/images/scion-38.jpg" });
+        await chrome.action.setIcon({path: "/images/scion-38.jpg"});
     } else {
-        await chrome.action.setIcon({ path: "/images/scion-38_disabled.jpg" });
+        await chrome.action.setIcon({path: "/images/scion-38_disabled.jpg"});
     }
 }
 

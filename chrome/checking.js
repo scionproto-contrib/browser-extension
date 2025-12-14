@@ -5,7 +5,6 @@ const spinnerElement = document.getElementById("spinner");
 const statusElement = document.getElementById('status');
 const originalUrlElement = document.getElementById('original-url');
 
-// TODO: remove this helper function to simulate sleeping (Thread.sleep equivalent) after testing
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -24,7 +23,7 @@ async function init() {
     originalUrlElement.textContent = originalUrl;
     statusElement.textContent = 'Checking SCION compatibility for:';
 
-    // TODO: remove this after testing (fake delay to verify checking.html page is working)
+    // TODO: remove this after testing (fake delay to verify checking.html page is working) and its related 'sleep' helper function
     await sleep(2000);
 
     // extracting the hostname from the URL

@@ -44,7 +44,6 @@ class DatabaseAdapter {
     get = (filter, loadFromStorage) => {
         return new Promise(async resolve => {
             const run = async () => {
-                await load();
                 let filtered = root.database[this.table] || [];
                 Object.keys(filter || {}).forEach((key) => {
                     filtered = filtered.filter(r => r[key] === filter[key]);
@@ -62,7 +61,6 @@ class DatabaseAdapter {
 
     first = (filter) => {
         return new Promise(async resolve => {
-            await load();
             let filtered = root.database[this.table] || [];
             Object.keys(filter || {}).forEach((key) => {
                 filtered = filtered.filter(r => r[key] === filter[key]);
@@ -76,8 +74,6 @@ class DatabaseAdapter {
         return new Promise(async resolve => {
 
             // TODO: this works for now, determine whether there is a more efficient way of doing this instead of accessing sync storage for every entry to be added...
-            // TODO: but why is this needed, given the load() call in the getRequestsDatabaseAdapter???
-            await load();
             // keep list small (sync storage quota)
             const list = root.database[this.table] || (root.database[this.table] = []);
             while (list.length > 50) {
@@ -109,7 +105,6 @@ class DatabaseAdapter {
 
     update = (requestId, newEntry) => {
         return new Promise(async resolve => {
-            await load();
             const list = root.database[this.table] || (root.database[this.table] = []);
             const entryIndex = list.findIndex(r => r.requestId === requestId);
             if (entryIndex >= 0) {
@@ -125,13 +120,7 @@ class DatabaseAdapter {
     }
 }
 
-// using this variable to detect if the service worker got torn down and rebuilt, thus requiring a reload from storage
-let currentDbInstance = null;
-
 export const getRequestsDatabaseAdapter = () => {
-    if (!currentDbInstance) {
-        currentDbInstance = load().catch(() => {});
-    }
-
-    return currentDbInstance.then(() => new DatabaseAdapter("requests"));
+    // always first loading the data from storage such that the database is up-to-date
+    return load().then(() => new DatabaseAdapter("requests"));
 }
