@@ -89,52 +89,6 @@ export async function setGlobalStrictMode(globalStrictMode) {
 }
 
 /**
- * Returns a DNR rule that redirects all `main_frame` requests to the `checking.html` page for a synchronous blocking lookup.
- */
-function createMainFrameRedirectRule(id) {
-    return {
-        id,
-        priority: 1,
-        action: {
-            type: 'redirect',
-            redirect: {
-                // match entire URL and append it to a hash (separator character expected by checking.js)
-                regexSubstitution: EXT_PAGE + '#\\0',
-            },
-        },
-        condition: {
-            regexFilter: '^.+$', // match any URL
-            resourceTypes: MAIN_FRAME_TYPE
-        }
-    };
-}
-
-/**
- * Returns a DNR rule that redirects all sub-resources to the proxy `/redirect` endpoint.
- */
-function createSubResourcesRedirectRule(id) {
-    return {
-        id,
-        priority: 1,
-        action: {
-            type: 'redirect',
-            redirect: {
-                // Match entire URL and stick it behind a hash
-                regexSubstitution:  `${proxyAddress}${proxyURLResolvePath}?${proxyURLResolveParam}=\\0`,
-            },
-        },
-        condition: {
-            regexFilter: '^.+$', // match any URL
-            resourceTypes: SUBRESOURCE_TYPES,
-            excludedRequestDomains: [
-                proxyHost,
-                WPAD_URL,
-            ],
-        },
-    };
-}
-
-/**
  * Creates a DNR blocking rule with the given `id` for the specified `host` and immediately enables this rule.
  *
  * Thus, only call this function, if the rule should also be applied immediately.
@@ -191,6 +145,52 @@ function createAllowRule(host, id) {
             resourceTypes: ALL_RESOURCE_TYPES
         }
     }
+}
+
+/**
+ * Returns a DNR rule that redirects all `main_frame` requests to the `checking.html` page for a synchronous blocking lookup.
+ */
+function createMainFrameRedirectRule(id) {
+    return {
+        id,
+        priority: 1,
+        action: {
+            type: 'redirect',
+            redirect: {
+                // match entire URL and append it to a hash (separator character expected by checking.js)
+                regexSubstitution: EXT_PAGE + '#\\0',
+            },
+        },
+        condition: {
+            regexFilter: '^.+$', // match any URL
+            resourceTypes: MAIN_FRAME_TYPE
+        }
+    };
+}
+
+/**
+ * Returns a DNR rule that redirects all sub-resources to the proxy `/redirect` endpoint.
+ */
+function createSubResourcesRedirectRule(id) {
+    return {
+        id,
+        priority: 1,
+        action: {
+            type: 'redirect',
+            redirect: {
+                // Match entire URL and stick it behind a hash
+                regexSubstitution: `${proxyAddress}${proxyURLResolvePath}?${proxyURLResolveParam}=\\0`,
+            },
+        },
+        condition: {
+            regexFilter: '^.+$', // match any URL
+            resourceTypes: SUBRESOURCE_TYPES,
+            excludedRequestDomains: [
+                proxyHost,
+                WPAD_URL,
+            ],
+        },
+    };
 }
 
 /**
