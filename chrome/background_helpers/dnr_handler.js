@@ -30,18 +30,6 @@ const ALL_RESOURCE_TYPES = ["main_frame", "sub_frame", "xmlhttprequest", "script
 const MAIN_FRAME_TYPE = ["main_frame"];
 const SUBRESOURCE_TYPES = ["sub_frame", "xmlhttprequest", "script", "image", "font", "media", "stylesheet", "object", "other", "ping", "websocket", "webtransport"];
 
-// lock to prevent interleavings when generating block rule IDs since access to sync storage is async
-let idLock = Promise.resolve();
-
-function withLock(fn) {
-    // chain the new work onto the previous one
-    const p = idLock.then(fn, fn);
-    // ensure errors don’t break the chain forever
-    idLock = p.catch(() => {
-    });
-    return p;
-}
-
 /**
  * Initializes the DNR handler.
  *
@@ -69,11 +57,30 @@ export async function initializeDnr(globalStrictMode) {
 export async function setGlobalStrictMode(globalStrictMode) {
     await removeAllDnrBlockRules();
     if (globalStrictMode) {
+        const databaseAdapter = await getRequestsDatabaseAdapter();
+        const requests = await databaseAdapter.get();
+
+        let allowedHostsWithId = [];
+        let blockedHostsWithId = [];
+        for (const request of requests) {
+            const entry = [request.domain, request.dnrRuleId];
+            if (request.scionEnabled) allowedHostsWithId.push(entry);
+            else blockedHostsWithId.push(entry);
+        }
+
+        let dnrRules = [
+            createMainFrameRedirectRule(MAIN_FRAME_REDIRECT_RULE_ID),
+            createSubResourcesRedirectRule(SUBRESOURCES_REDIRECT_RULE_ID),
+        ];
+        for (const hostWithId of allowedHostsWithId) {
+            dnrRules.push(createAllowRule(hostWithId[0], hostWithId[1]));
+        }
+        for (const hostWithId of blockedHostsWithId) {
+            dnrRules.push(createBlockRule(hostWithId[0], hostWithId[1]));
+        }
+
         await chrome.declarativeNetRequest.updateDynamicRules({
-            addRules: [
-                createMainFrameRedirectRule(MAIN_FRAME_REDIRECT_RULE_ID),
-                createSubResourcesRedirectRule(SUBRESOURCES_REDIRECT_RULE_ID),
-            ],
+            addRules: dnrRules,
             removeRuleIds: []
         });
 
@@ -139,24 +146,10 @@ export async function addDnrBlockingRule(host, id) {
     const rule = createBlockRule(host, id)
     await chrome.declarativeNetRequest.updateDynamicRules({addRules: [rule], removeRuleIds: []})
 }
+
 export async function addDnrAllowRule(host, id) {
     const rule = createAllowRule(host, id)
     await chrome.declarativeNetRequest.updateDynamicRules({addRules: [rule], removeRuleIds: []})
-}
-
-/**
- * Removes any existing rules, then adds back all block rules of non-scion pages
- */
-export async function reAddAllDnrBlockRules() {
-    const databaseAdapter = await getRequestsDatabaseAdapter();
-    const requestsNonScion = await databaseAdapter.get({scionEnabled: false}, false);
-    const domainIdPairs = requestsNonScion.map((entry) => ({
-        domain: entry.domain,
-        dnrBlockRuleId: entry.dnrBlockRuleId,
-    }));
-
-    await removeAllDnrBlockRules();
-    await addMultipleDnrBlockingRules(domainIdPairs);
 }
 
 /**
@@ -174,16 +167,6 @@ export async function removeAllDnrBlockRules(customRulesToRemoveIds = null) {
     if (!rulesToRemoveIds || rulesToRemoveIds.length === 0) return;
 
     await chrome.declarativeNetRequest.updateDynamicRules({addRules: [], removeRuleIds: rulesToRemoveIds});
-}
-
-/**
- * Creates rules for all key-value pairs in `entries` and applies these rules with a single call to `updateDynamicRules`.
- *
- * Note: This function is functionally equivalent to calling `addDnrBlockingRule` for each entry individually.
- */
-async function addMultipleDnrBlockingRules(entries) {
-    const rules = entries.map(entry => createBlockRule(entry.domain, entry.dnrBlockRuleId));
-    await chrome.declarativeNetRequest.updateDynamicRules({addRules: rules, removeRuleIds: []});
 }
 
 function createBlockRule(host, id) {
@@ -226,4 +209,16 @@ export async function fetchNextDnrRuleId() {
 
         return nextDnrRuleId;
     })
+}
+
+// lock to prevent interleavings when generating block rule IDs since access to sync storage is async
+let idLock = Promise.resolve();
+
+function withLock(fn) {
+    // chain the new work onto the previous one
+    const p = idLock.then(fn, fn);
+    // ensure errors don’t break the chain forever
+    idLock = p.catch(() => {
+    });
+    return p;
 }
