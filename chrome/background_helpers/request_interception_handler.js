@@ -136,7 +136,7 @@ async function createDBEntry(hostname, currentTabId, scionEnabled) {
     };
 
     const databaseAdapter = await getRequestsDatabaseAdapter();
-    databaseAdapter.add(requestDBEntry, {
+    await databaseAdapter.add(requestDBEntry, {
         mainDomain: requestDBEntry.mainDomain,
         scionEnabled: requestDBEntry.scionEnabled,
         domain: requestDBEntry.domain,
