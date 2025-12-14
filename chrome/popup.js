@@ -658,7 +658,7 @@ async function loadRequestInfo() {
         const url = new URL(activeTab.url);
         popupMainDomain = url.hostname;
 
-        let requests = await databaseAdapter.get({mainDomain: url.hostname}, true);
+        let requests = await databaseAdapter.get({mainDomain: url.hostname});
         const mainDomainSCIONEnabled = requests.find(r => r.tabId === activeTabId && r.domain === url.hostname && r.scionEnabled);
 
         if (perSiteStrictMode[url.hostname]) {
