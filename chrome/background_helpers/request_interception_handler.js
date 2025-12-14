@@ -27,7 +27,7 @@ export function resetKnownHostnames() {
     isHostnameSCION = {};
 }
 
-export async function isHostScion(hostname, currentTabId) {
+export async function isHostScion(hostname, initiator, currentTabId) {
     let scionEnabled = false;
 
     const fetchUrl = `${proxyAddress}${proxyHostResolvePath}?${proxyHostResolveParam}=${hostname}`;
@@ -43,7 +43,7 @@ export async function isHostScion(hostname, currentTabId) {
         if (scionEnabled) console.log("[DB]: scion enabled (after resolve): ", hostname);
         else console.log("[DB]: scion disabled (after resolve): ", hostname);
 
-        const dnrRuleId = await createDBEntry(hostname, currentTabId, scionEnabled);
+        const dnrRuleId = await createDBEntry(hostname, initiator, currentTabId, scionEnabled);
         await handleAddDnrRule(hostname, dnrRuleId, scionEnabled);
     } else {
         console.warn("[DB]: Resolution error: ", response.status);
@@ -79,7 +79,7 @@ function onHeadersReceived(details) {
         });
 
         async function asyncHelper() {
-            const dnrRuleId = await createDBEntry(targetUrl.hostname, details.tabId, scionEnabled);
+            const dnrRuleId = await createDBEntry(targetUrl.hostname, details.initiator || "", details.tabId, scionEnabled);
             await handleAddDnrRule(targetUrl.hostname, dnrRuleId, scionEnabled);
         }
     }
@@ -124,13 +124,13 @@ function onErrorOccurred(details) {
 /**
  * Creates a DB entry for the provided `host` and returns the generated `dnrRuleId`.
  */
-async function createDBEntry(hostname, currentTabId, scionEnabled) {
+async function createDBEntry(hostname, initiator, currentTabId, scionEnabled) {
     const dnrRuleId = await fetchNextDnrRuleId();
     const requestDBEntry = {
         requestId: dnrRuleId,
         tabId: currentTabId,
         domain: hostname,
-        mainDomain: hostname,
+        mainDomain: initiator,
         scionEnabled: scionEnabled,
         dnrRuleId: dnrRuleId, // set it to -1 by default (stays -1 for scion-enabled domains, otherwise gets assigned a proper rule id)
     };

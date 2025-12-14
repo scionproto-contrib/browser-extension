@@ -38,7 +38,8 @@ async function init() {
     }
 
     const currentTab = await chrome.tabs.getCurrent();
-    const isScion = await isHostScion(host, currentTab.id);
+    // supplying an empty initiator, as the hosts checked by checking.js are of type main_frame, thus not sub-resources and thus not requested by some other host
+    const isScion = await isHostScion(host, "", currentTab.id);
     if (!isScion) {
         statusElement.textContent = "This page is NOT SCION-capable and was blocked in strict mode.";
         checkFinished()
