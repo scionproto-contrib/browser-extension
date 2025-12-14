@@ -32,16 +32,7 @@ class DatabaseAdapter {
         this.table = table;
     }
 
-    // This part was the reason for missing SCION domain indicators.
-    // Here we need to differentiate who is calling
-    // The databaseAdapter created from background.js
-    // Will be kept in memory all the time, which means we can safely just
-    // Write into memory. The persisting to the synced storage
-    // Will be debounced to avoid too many writes.
-    // The databaseAdapter from the popup.js will be created from scratch
-    // every time the popup opens, which means it needs to fetch the
-    // resources from storage, by passing loadFromStorage=true
-    get = (filter, loadFromStorage) => {
+    get = (filter) => {
         return new Promise(async resolve => {
             const run = async () => {
                 let filtered = root.database[this.table] || [];
@@ -50,12 +41,7 @@ class DatabaseAdapter {
                 });
                 resolve(filtered);
             };
-
-            if (loadFromStorage) {
-                load().then(run);
-            } else {
-                await run();
-            }
+            await run();
         });
     }
 
