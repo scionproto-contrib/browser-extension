@@ -2,7 +2,7 @@
 'use strict';
 
 
-import {getRequests, getSyncValue, saveSyncValue} from "./shared/storage.js";
+import {getSyncValue, getTabResources, saveSyncValue} from "./shared/storage.js";
 
 const DEFAULT_PROXY_SCHEME = "https"
 const DEFAULT_PROXY_HOST = "forward-proxy.scion.ethz.ch";
@@ -648,81 +648,59 @@ function toggleExtensionRunning() {
 }
 
 async function loadRequestInfo() {
-    const checkedDomains = [];
-    chrome.tabs.query({active: true, currentWindow: true}, async (tabs) => {
-        var activeTab = tabs[0];
-        var activeTabId = activeTab.id; // or do whatever you need
-        const url = new URL(activeTab.url);
-        popupMainDomain = url.hostname;
+    const tabs = await chrome.tabs.query({active: true, currentWindow: true});
+    const activeTab = tabs[0];
+    const activeTabId = activeTab.id;
+    const url = new URL(activeTab.url);
+    popupMainDomain = url.hostname;
 
-        let requests = await getRequests({mainDomain: url.hostname});
-        const mainDomainSCIONEnabled = requests.find(r => r.tabId === activeTabId && r.domain === url.hostname && r.scionEnabled);
+    const resources = await getTabResources(activeTabId) ?? [];
+    const mainDomainSCIONEnabled = resources.find(resource => resource[0] === url.hostname && resource[1]);
 
-        if (perSiteStrictMode[url.hostname]) {
-            mainDomain.innerHTML = "SCION preference for " + url.hostname;
-            toggleRunning.checked = true; // true
-            toggleRunning.classList.remove("halfchecked");
-            lineRunning.style.backgroundColor = "#48bb78";
-            scionmode.innerHTML = "Strict";
-        } else if (mainDomainSCIONEnabled) {
-            mainDomain.innerHTML = "SCION preference for " + url.hostname;
-            toggleRunning.checked = false; // true
-            toggleRunning.classList.add("halfchecked");
-            lineRunning.style.backgroundColor = "#cccccc";
-            scionmode.innerHTML = "When available";
+    if (perSiteStrictMode[url.hostname]) {
+        mainDomain.innerHTML = "SCION preference for " + url.hostname;
+        toggleRunning.checked = true; // true
+        toggleRunning.classList.remove("halfchecked");
+        lineRunning.style.backgroundColor = "#48bb78";
+        scionmode.innerHTML = "Strict";
+    } else if (mainDomainSCIONEnabled) {
+        mainDomain.innerHTML = "SCION preference for " + url.hostname;
+        toggleRunning.checked = false; // true
+        toggleRunning.classList.add("halfchecked");
+        lineRunning.style.backgroundColor = "#cccccc";
+        scionmode.innerHTML = "When available";
+    } else {
+        scionModePreference.style.display = "none";
+    }// TODO: Else case would be no SCION... toggleRunning.checked = false;
+
+    let mixedContent = false
+    for (const resource of resources) {
+        const domain = resource[0];
+        const scionEnabled = resource[1];
+
+        let p = document.createElement("p");
+        p.style.fontSize = "14px"
+        if (scionEnabled) {
+            p.innerHTML = "<span>&#x2705;</span> " + domain;
         } else {
-            scionModePreference.style.display = "none";
-        }// TODO: Else case would be no SCION... toggleRunning.checked = false;
-        requests = requests.filter(r => r.tabId === activeTabId);
-        console.log(requests);
-        let mixedContent = false;
-
-        for (let i = requests.length - 1; i >= 0; i--) {
-            const r = requests[i];
-            if (!checkedDomains.find(d => d === r.domain)) {
-                checkedDomains.push(r.domain);
-                let p = document.createElement("p");
-                p.style.fontSize = "14px"
-                if (r.scionEnabled) {
-                    p.innerHTML = "<span>&#x2705;</span> " + r.domain;
-                } else {
-                    mixedContent = true;
-                    p.innerHTML = "<span>&#x274C;</span> " + r.domain;
-                }
-
-                domainList.appendChild(p);
-            }
-        }
-        requests.forEach(r => {
-            if (!checkedDomains.find(d => d === r.domain)) {
-                checkedDomains.push(r.domain);
-                const sEnabled = requests.find(r2 => r.domain === r2.domain && r2.scionEnabled);
-                let p = document.createElement("p");
-                p.style.fontSize = "14px"
-                if (sEnabled) {
-                    p.innerHTML = "<span>&#x2705;</span> " + r.domain;
-                } else {
-                    mixedContent = true;
-                    p.innerHTML = "<span>&#x274C;</span> " + r.domain;
-                }
-
-                domainList.appendChild(p);
-            }
-        });
-
-        if (mainDomainSCIONEnabled) {
-            if (mixedContent) {
-                scionsupport.innerHTML = "Not all resources loaded via SCION";
-            } else {
-                scionsupport.innerHTML = "All resources loaded via SCION";
-            }
-        } else {
-            scionsupport.innerHTML = "No resourced loaded via SCION";
+            mixedContent = true;
+            p.innerHTML = "<span>&#x274C;</span> " + domain;
         }
 
-        // Update path usage for the current domain
-        updatePathUsage();
-    });
+        domainList.appendChild(p);
+    }
 
+    if (mainDomainSCIONEnabled) {
+        if (mixedContent) {
+            scionsupport.innerHTML = "Not all resources loaded via SCION";
+        } else {
+            scionsupport.innerHTML = "All resources loaded via SCION";
+        }
+    } else {
+        scionsupport.innerHTML = "No resourced loaded via SCION";
+    }
+
+    // Update path usage for the current domain
+    updatePathUsage();
 }
 

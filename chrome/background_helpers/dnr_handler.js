@@ -121,7 +121,7 @@ export async function setPerSiteStrictMode(perSiteStrictMode) {
         else {
             // using 0 as the tab id, as no tab can be associated with this request
             // isHostScion already adds the appropriate DNR rules based on the lookup result (including creating the DB entry for the host)
-            await isHostScion(strictHost, "", 0);
+            await isHostScion(strictHost, "", chrome.tabs.TAB_ID_NONE);
         }
     }
 

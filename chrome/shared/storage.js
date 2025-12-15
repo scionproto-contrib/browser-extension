@@ -18,8 +18,69 @@ export async function getLocalValue(key) {
     return result[key];
 }
 
+// ===== LOCAL STORAGE TAB_ID MAP =====
+// Contains a map in local storage that maps a `tabId` to the hostnames of the resources that tab requested
+
+const TAB_RESOURCES = "tabResources";
+
+/**
+ * Returns a list of [hostnames, scionEnabled] tuples of resources the tab with `tabId` requested.
+ * Returns null if the dictionary itself or the entry for `tabId` do not exist.
+ */
+export async function getTabResources(tabId) {
+    const tabResources = await getLocalValue(TAB_RESOURCES);
+    if (!tabResources || !tabResources[tabId]) return null;
+    return tabResources[tabId];
+}
+
+/**
+ * Resets the entry for the `tabId` to an empty list if that entry exists.
+ */
+export async function clearTabResources(tabId) {
+    const tabResources = await getLocalValue(TAB_RESOURCES);
+    // ignore cases where the dictionary itself or the entry for `tabId` do not exist
+    if (!tabResources || !tabResources[tabId]) return;
+    tabResources[tabId] = [];
+    await saveLocalValue(TAB_RESOURCES, tabResources);
+}
+
+export async function deleteTabResources(tabId) {
+    const tabResources = await getLocalValue(TAB_RESOURCES);
+    if (!tabResources || !tabResources[tabId]) return;
+    delete tabResources[tabId];
+    await saveLocalValue(TAB_RESOURCES, tabResources);
+}
+
+/**
+ * Adds the [`resourceHostname`, `resourceHostScionEnabled`] tuple to the list of resources requested by the tab with `tabId`.
+ */
+export async function addTabResource(tabId, resourceHostname, resourceHostScionEnabled) {
+    const entry = [resourceHostname, resourceHostScionEnabled];
+
+    let tabResources = await getLocalValue(TAB_RESOURCES);
+    if (!tabResources) {
+        // case: the dictionary does not exist
+        tabResources = {};
+        tabResources[tabId] = [entry];
+    } else {
+        if (!tabResources[tabId]) {
+            // case: the dictionary exists, but does not contain `tabId` as a key
+            tabResources[tabId] = [entry];
+        } else {
+            // case: the dictionary exists and contains `tabId` as a key, thus this entry must be updated
+            const newResources = tabResources[tabId];
+            newResources.push(entry);
+            tabResources[tabId] = newResources;
+        }
+    }
+
+    await saveLocalValue(TAB_RESOURCES, tabResources);
+}
+
+// ====================================
 
 // ===== SYNC STORAGE REQUESTS ENTRY =====
+
 const REQUESTS = "requests";
 const MAX_REQUEST_ENTRIES = 50; // keep list small (sync storage quota)
 

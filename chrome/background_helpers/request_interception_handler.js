@@ -1,7 +1,7 @@
 import {proxyAddress, proxyHostResolveParam, proxyHostResolvePath, proxyURLResolvePath} from "./proxy_handler.js";
 import {addDnrAllowRule, addDnrBlockingRule, fetchNextDnrRuleId} from "./dnr_handler.js";
 import {policyCookie} from "./geofence_handler.js";
-import {addRequest, getSyncValue} from "../shared/storage.js";
+import {addRequest, addTabResource, getSyncValue} from "../shared/storage.js";
 
 let isHostnameSCION = {};
 
@@ -12,6 +12,8 @@ let isHostnameSCION = {};
  * - this return value can be detected and intercepted in the `onHeadersReceived` function
  */
 export function initializeRequestInterceptionListeners() {
+    chrome.webRequest.onBeforeRequest.addListener(onBeforeRequest, {urls: ["<all_urls>"]});
+
     chrome.webRequest.onHeadersReceived.addListener(onHeadersReceived, {urls: ["<all_urls>"]});
 
     // in manifest version 3 (MV3), the onAuthRequired is the only listener that still supports and accepts the 'blocking' extraInfoSpec
@@ -52,6 +54,10 @@ export async function isHostScion(hostname, initiator, currentTabId) {
     return scionEnabled;
 }
 
+function onBeforeRequest(details) {
+    // TODO: additionally, create the entries through addTabResource here too (for those hosts where we know whether they are scion or not (those in sync storage), since for the others, a lookup and then add-call will be performed anyway)
+}
+
 // Skip answers on a resolve request with a status code 500 if the host is not scion capable
 function onHeadersReceived(details) {
     if (details.url.startsWith(`${proxyAddress}${proxyURLResolvePath}`)) {
@@ -79,7 +85,7 @@ function onHeadersReceived(details) {
 
         async function asyncHelper() {
             const initiatorUrl = details.initiator ? new URL(details.initiator) : null;
-            const dnrRuleId = await createDBEntry(targetUrl.hostname, initiatorUrl?.hostname || "", scionEnabled);
+            const dnrRuleId = await createDBEntry(targetUrl.hostname, initiatorUrl?.hostname || "", details.tabId, scionEnabled);
             await handleAddDnrRule(targetUrl.hostname, dnrRuleId, scionEnabled);
         }
     }
@@ -128,7 +134,6 @@ async function createDBEntry(hostname, initiator, currentTabId, scionEnabled) {
     const dnrRuleId = await fetchNextDnrRuleId();
     const requestDBEntry = {
         requestId: dnrRuleId,
-        tabId: currentTabId,
         domain: hostname,
         mainDomain: initiator,
         scionEnabled: scionEnabled,
@@ -140,6 +145,8 @@ async function createDBEntry(hostname, initiator, currentTabId, scionEnabled) {
         scionEnabled: requestDBEntry.scionEnabled,
         domain: requestDBEntry.domain,
     });
+
+    if (currentTabId !== chrome.tabs.TAB_ID_NONE) await addTabResource(currentTabId, hostname, scionEnabled);
 
     return dnrRuleId;
 }

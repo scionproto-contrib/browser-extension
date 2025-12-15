@@ -1,16 +1,15 @@
-import {getRequests} from "../shared/storage.js";
+import {getTabResources} from "../shared/storage.js";
 
 export function initializeTabListeners() {
     // User switches between tabs
-    chrome.tabs.onActivated.addListener(function (activeInfo) {
-        chrome.tabs.get(activeInfo.tabId, (tab) => {
-            handleTabChange(tab);
-        });
+    chrome.tabs.onActivated.addListener(async function (activeInfo) {
+        const tab = await chrome.tabs.get(activeInfo.tabId);
+        await handleTabChange(tab);
     });
 
     // Update icon depending on hostname of current active tab
-    chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
-        handleTabChange(tab);
+    chrome.tabs.onUpdated.addListener(async function (tabId, changeInfo, tab) {
+        await handleTabChange(tab);
     });
 }
 
@@ -19,15 +18,17 @@ export function initializeTabListeners() {
 async function handleTabChange(tab) {
     if (tab.active && tab.url) {
         const url = new URL(tab.url);
-        let requests = await getRequests({ mainDomain: url.hostname });
-        let mixedContent;
 
-        const mainDomainSCIONEnabled = requests.find(r => r.tabId === tab.id && r.domain === url.hostname && r.scionEnabled);
-        requests.forEach(r => {
-            if (!r.scionEnabled) {
+        let mixedContent;
+        const resources = await getTabResources(tab.id) ?? [];
+        const mainDomainSCIONEnabled = resources.find(resource => resource[0] === url.hostname && resource[1]);
+        for (const resource of resources) {
+            if (!resource[1]) {
                 mixedContent = true;
+                break;
             }
-        });
+        }
+
         if (mainDomainSCIONEnabled) {
             if (mixedContent) {
                 await chrome.action.setIcon({path: "/images/scion-38_mixed.jpg"});
