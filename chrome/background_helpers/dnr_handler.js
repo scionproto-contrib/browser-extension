@@ -47,15 +47,7 @@ export async function initializeDnr(globalStrictMode) {
         await saveStorageValue(NextDnrRuleId, BLOCK_RULE_START_ID);
     }
 
-    // TODO: due to the ephemerality of the service workers, the following line will always remove all, then re-add all rules (very inefficient)
     await setGlobalStrictMode(globalStrictMode);
-
-    // only handle perSiteStrictMode if global mode is off, otherwise global overrides them anyway
-    if (!globalStrictMode) {
-        // fallback to empty dictionary if no value was present in storage
-        const perSiteStrictMode = await getStorageValue(PerSiteStrictMode) || {};
-        await setPerSiteStrictMode(perSiteStrictMode);
-    }
 }
 
 /**
@@ -93,6 +85,8 @@ export async function setGlobalStrictMode(globalStrictMode) {
             removeRuleIds: []
         });
     } else {
+        // only handle perSiteStrictMode if global mode is off, otherwise global overrides them anyway
+        // fallback to empty dictionary if no value was present in storage
         const perSiteStrictMode = await getStorageValue(PerSiteStrictMode) || {};
         await setPerSiteStrictMode(perSiteStrictMode);
     }
