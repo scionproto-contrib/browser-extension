@@ -1,6 +1,7 @@
 import {getStorageValue, saveStorageValue} from "../shared/storage.js";
 import {getRequestsDatabaseAdapter} from "../database.js";
 import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD_URL} from "./proxy_handler.js";
+import {isHostScion} from "./request_interception_handler.js";
 
 /*
 General DNR (DeclarativeNetRequest) strategy:
@@ -17,13 +18,15 @@ General DNR (DeclarativeNetRequest) strategy:
     to the proxy etc.)
  */
 
-// custom DNR rules
-const MAIN_FRAME_REDIRECT_RULE_ID = 1;
-const SUBRESOURCES_REDIRECT_RULE_ID = 2;
+// custom DNR rules (the ID simultaneously represents its priority)
+const SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID = 1;
+const MAIN_FRAME_REDIRECT_RULE_ID = 2;
+const SUBRESOURCES_REDIRECT_RULE_ID = 3;
 
 // sufficiently high to have space for custom DNR rules (specified above)
 const BLOCK_RULE_START_ID = 10000;
 const NextDnrRuleId = "nextDnrRuleId"
+const PerSiteStrictMode = "perSiteStrictMode";
 
 const EXT_PAGE = chrome.runtime.getURL('/checking.html');
 const ALL_RESOURCE_TYPES = ["main_frame", "sub_frame", "xmlhttprequest", "script", "image", "font", "media", "stylesheet", "object", "other", "ping", "websocket", "webtransport"];
@@ -47,7 +50,12 @@ export async function initializeDnr(globalStrictMode) {
     // TODO: due to the ephemerality of the service workers, the following line will always remove all, then re-add all rules (very inefficient)
     await setGlobalStrictMode(globalStrictMode);
 
-    // TODO: add selective DNR rules for pages that were specifically set to 'strict' by the user
+    // only handle perSiteStrictMode if global mode is off, otherwise global overrides them anyway
+    if (!globalStrictMode) {
+        // fallback to empty dictionary if no value was present in storage
+        const perSiteStrictMode = await getStorageValue(PerSiteStrictMode) || {};
+        await setPerSiteStrictMode(perSiteStrictMode);
+    }
 }
 
 /**
@@ -55,6 +63,7 @@ export async function initializeDnr(globalStrictMode) {
  * installing DNR rules.
  */
 export async function setGlobalStrictMode(globalStrictMode) {
+    // TODO: possibly improve this function by considering already existing rules and reusing them
     await removeAllDnrBlockRules();
     if (globalStrictMode) {
         const databaseAdapter = await getRequestsDatabaseAdapter();
@@ -83,9 +92,55 @@ export async function setGlobalStrictMode(globalStrictMode) {
             addRules: dnrRules,
             removeRuleIds: []
         });
-
-        // TODO: additionally, also add higher-priority rules for those hosts already known through storage
+    } else {
+        const perSiteStrictMode = await getStorageValue(PerSiteStrictMode) || {};
+        await setPerSiteStrictMode(perSiteStrictMode);
     }
+}
+
+/**
+ * Updates the DNR rules to handle individual strict sites (which are based on the `perSiteStrictMode` parameter).
+ */
+export async function setPerSiteStrictMode(perSiteStrictMode) {
+    // TODO: possibly improve this function by considering already existing rules and reusing them
+    // if globalStrictMode is on, do not change any DNR rules
+    const globalStrictMode = await getStorageValue("globalStrictMode");
+    if (globalStrictMode) return;
+
+    const databaseAdapter = await getRequestsDatabaseAdapter();
+    const requests = await databaseAdapter.get();
+    let allowedHostsWithId = {};
+    let blockedHostsWithId = {};
+    for (const request of requests) {
+        if (request.scionEnabled) allowedHostsWithId[request.domain] = request.dnrRuleId;
+        else blockedHostsWithId[request.domain] = request.dnrRuleId;
+    }
+
+    await removeAllDnrBlockRules();
+    const strictHosts = Object.entries(perSiteStrictMode)
+        .filter(([, isStrict]) => isStrict)
+        .map(([host]) => host);
+
+    // adding rules that block each of the hosts directly
+    let rules = [];
+    for (const strictHost of strictHosts) {
+        // if the extension has info about the host, add the appropriate DNR rule, otherwise perform a lookup
+        if (Object.keys(blockedHostsWithId).includes(strictHost)) rules.push(createBlockRule(strictHost, blockedHostsWithId[strictHost]));
+        else if (Object.keys(allowedHostsWithId).includes(strictHost)) rules.push(createAllowRule(strictHost, allowedHostsWithId[strictHost]));
+        else {
+            // using 0 as the tab id, as no tab can be associated with this request
+            // isHostScion already adds the appropriate DNR rules based on the lookup result (including creating the DB entry for the host)
+            await isHostScion(strictHost, "", 0);
+        }
+    }
+
+    // the individual rules above are insufficient, as a site marked as 'strict' can invoke other sub-resources that
+    // should be blocked, but might have a different hostname and thus might not have a matching rule
+    // thus, a redirect rule is needed that redirects all requests whose initiator is marked as 'strict'
+    const subresourceInitiatorRule = createSubResourcesInitiatorRedirectRule(SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID, strictHosts);
+    rules.push(subresourceInitiatorRule);
+
+    await chrome.declarativeNetRequest.updateDynamicRules({addRules: rules, removeRuleIds: []});
 }
 
 /**
@@ -125,8 +180,8 @@ export async function removeAllDnrBlockRules(customRulesToRemoveIds = null) {
 
 function createBlockRule(host, id) {
     return {
-        id,
-        priority: 1,
+        id: id,
+        priority: 100,
         action: {type: 'block'},
         condition: {
             requestDomains: [host],
@@ -137,8 +192,8 @@ function createBlockRule(host, id) {
 
 function createAllowRule(host, id) {
     return {
-        id,
-        priority: 100,
+        id: id,
+        priority: 101,
         action: {type: 'allow'},
         condition: {
             requestDomains: [host],
@@ -152,8 +207,8 @@ function createAllowRule(host, id) {
  */
 function createMainFrameRedirectRule(id) {
     return {
-        id,
-        priority: 1,
+        id: id,
+        priority: id,
         action: {
             type: 'redirect',
             redirect: {
@@ -169,28 +224,56 @@ function createMainFrameRedirectRule(id) {
 }
 
 /**
- * Returns a DNR rule that redirects all sub-resources to the proxy `/redirect` endpoint.
+ * Returns a DNR rule that redirects all sub-resources to the proxy `proxyURLResolvePath` endpoint.
  */
 function createSubResourcesRedirectRule(id) {
     return {
-        id,
-        priority: 1,
+        id: id,
+        priority: id,
         action: {
             type: 'redirect',
             redirect: {
-                // Match entire URL and stick it behind a hash
+                // pass entire URL to the proxy for lookup
                 regexSubstitution: `${proxyAddress}${proxyURLResolvePath}?${proxyURLResolveParam}=\\0`,
             },
         },
         condition: {
             regexFilter: '^.+$', // match any URL
             resourceTypes: SUBRESOURCE_TYPES,
+            // exclude requests from the proxy to prevent lookup-loops
             excludedRequestDomains: [
                 proxyHost,
                 WPAD_URL,
             ],
         },
     };
+}
+
+/**
+ * Returns a DNR rule that redirects all sub-resources whose initiator is in `blockedInitiators` to the `proxyURLResolvePath` endpoint.
+ */
+function createSubResourcesInitiatorRedirectRule(id, blockedInitiators) {
+    return {
+        id: id,
+        priority: id,
+        action: {
+            type: 'redirect',
+            redirect: {
+                // pass entire URL to the proxy for lookup
+                regexSubstitution: `${proxyAddress}${proxyURLResolvePath}?${proxyURLResolveParam}=\\0`,
+            },
+        },
+        condition: {
+            regexFilter: '^.+$', // match any URL
+            resourceTypes: SUBRESOURCE_TYPES,
+            initiatorDomains: blockedInitiators,
+            // exclude requests from the proxy to prevent lookup-loops
+            excludedRequestDomains: [
+                proxyHost,
+                WPAD_URL,
+            ],
+        }
+    }
 }
 
 /**

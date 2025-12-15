@@ -4,24 +4,21 @@
 import {initializeProxyHandler, loadProxySettings} from "./background_helpers/proxy_handler.js";
 import {allowAllgeofence, geofence, resetPolicyCookie} from "./background_helpers/geofence_handler.js";
 import {getStorageValue, saveStorageValue} from "./shared/storage.js";
-import {initializeDnr, setGlobalStrictMode} from "./background_helpers/dnr_handler.js";
+import {initializeDnr, setGlobalStrictMode, setPerSiteStrictMode} from "./background_helpers/dnr_handler.js";
 import {initializeRequestInterceptionListeners, resetKnownHostnames} from "./background_helpers/request_interception_handler.js";
 import {initializeTabListeners} from "./background_helpers/tab_handler.js";
 
 
-const GLOBAL_STRICT_MODE = "globalStrictMode"
-
-/** Background State */
-export let globalStrictMode = false;
-let perSiteStrictMode = {};
+const GlobalStrictMode = "globalStrictMode"
 
 /*--- setup ------------------------------------------------------------------*/
 
-getStorageValue(GLOBAL_STRICT_MODE).then(async (syncGlobalStrictMode) => {
+getStorageValue(GlobalStrictMode).then(async (syncGlobalStrictMode) => {
     console.log("globalStrictMode: value in sync storage is set to", syncGlobalStrictMode);
+    let globalStrictMode = false;
     if (!syncGlobalStrictMode) {
         console.log("globalStrictMode: thus setting globalStrictMode to", globalStrictMode);
-        await saveStorageValue(GLOBAL_STRICT_MODE, globalStrictMode);
+        await saveStorageValue(GlobalStrictMode, globalStrictMode);
     } else {
         globalStrictMode = syncGlobalStrictMode;
     }
@@ -29,9 +26,6 @@ getStorageValue(GLOBAL_STRICT_MODE).then(async (syncGlobalStrictMode) => {
     await initializeDnr(globalStrictMode);
 })
 
-getStorageValue('perSiteStrictMode').then((val) => {
-    perSiteStrictMode = val || {}; // Here we may get undefined which is bad
-});
 // Do icon setup etc at startup
 getStorageValue('extension_running').then(async extensionRunning => {
     await updateRunningIcon(extensionRunning);
@@ -58,14 +52,13 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
 
         } else if (changes.perSiteStrictMode?.newValue !== undefined) {
 
-            perSiteStrictMode = changes.perSiteStrictMode?.newValue;
+            // update DNR rules
+            await setPerSiteStrictMode(changes.perSiteStrictMode.newValue || {});
 
         } else if (changes.globalStrictMode?.newValue !== undefined) {
 
-            globalStrictMode = changes.globalStrictMode?.newValue;
-
-            // update DNR block rules
-            await setGlobalStrictMode(globalStrictMode);
+            // update DNR rules
+            await setGlobalStrictMode(changes.globalStrictMode.newValue);
 
         } else if (changes.isd_all?.newValue !== undefined) {
 
