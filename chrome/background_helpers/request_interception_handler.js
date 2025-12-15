@@ -2,7 +2,7 @@ import {proxyAddress, proxyHostResolveParam, proxyHostResolvePath, proxyURLResol
 import {getRequestsDatabaseAdapter} from "../database.js";
 import {addDnrAllowRule, addDnrBlockingRule, fetchNextDnrRuleId} from "./dnr_handler.js";
 import {policyCookie} from "./geofence_handler.js";
-import {getStorageValue} from "../shared/storage.js";
+import {getSyncValue} from "../shared/storage.js";
 
 let isHostnameSCION = {};
 
@@ -150,8 +150,8 @@ async function createDBEntry(hostname, initiator, currentTabId, scionEnabled) {
  * if either is true, adds the rule depending on whether `scionEnabled` for this host.
  */
 async function handleAddDnrRule(hostname, dnrRuleId, scionEnabled) {
-    const globalStrictMode = await getStorageValue("globalStrictMode");
-    const perSiteStrictMode = await getStorageValue("perSiteStrictMode");
+    const globalStrictMode = await getSyncValue("globalStrictMode");
+    const perSiteStrictMode = await getSyncValue("perSiteStrictMode");
     const strictHosts = Object.entries(perSiteStrictMode)
         .filter(entry => entry.value)
         .map(entry => entry.key);

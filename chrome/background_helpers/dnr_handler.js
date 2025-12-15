@@ -1,4 +1,4 @@
-import {getStorageValue, saveStorageValue} from "../shared/storage.js";
+import {getSyncValue, saveSyncValue} from "../shared/storage.js";
 import {getRequestsDatabaseAdapter} from "../database.js";
 import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD_URL} from "./proxy_handler.js";
 import {isHostScion} from "./request_interception_handler.js";
@@ -42,9 +42,9 @@ export async function initializeDnr(globalStrictMode) {
     console.log("Initializing DNR");
 
     // initialize NextDnrRuleId in sync storage (if not initialized already)
-    const nextDnrRuleId = await getStorageValue(NextDnrRuleId);
+    const nextDnrRuleId = await getSyncValue(NextDnrRuleId);
     if (!nextDnrRuleId) {
-        await saveStorageValue(NextDnrRuleId, BLOCK_RULE_START_ID);
+        await saveSyncValue(NextDnrRuleId, BLOCK_RULE_START_ID);
     }
 
     await setGlobalStrictMode(globalStrictMode);
@@ -87,7 +87,7 @@ export async function setGlobalStrictMode(globalStrictMode) {
     } else {
         // only handle perSiteStrictMode if global mode is off, otherwise global overrides them anyway
         // fallback to empty dictionary if no value was present in storage
-        const perSiteStrictMode = await getStorageValue(PerSiteStrictMode) || {};
+        const perSiteStrictMode = await getSyncValue(PerSiteStrictMode) || {};
         await setPerSiteStrictMode(perSiteStrictMode);
     }
 }
@@ -98,7 +98,7 @@ export async function setGlobalStrictMode(globalStrictMode) {
 export async function setPerSiteStrictMode(perSiteStrictMode) {
     // TODO: possibly improve this function by considering already existing rules and reusing them
     // if globalStrictMode is on, do not change any DNR rules
-    const globalStrictMode = await getStorageValue("globalStrictMode");
+    const globalStrictMode = await getSyncValue("globalStrictMode");
     if (globalStrictMode) return;
 
     const databaseAdapter = await getRequestsDatabaseAdapter();
@@ -275,14 +275,14 @@ function createSubResourcesInitiatorRedirectRule(id, blockedInitiators) {
  */
 export async function fetchNextDnrRuleId() {
     return withLock(async () => {
-        const nextDnrRuleId = await getStorageValue(NextDnrRuleId)
+        const nextDnrRuleId = await getSyncValue(NextDnrRuleId)
         if (!nextDnrRuleId) {
             console.error("An error occurred during fetchNextDnrRuleId - There was no value stored, the default 'undefined' was returned.");
             return -100;
         }
 
         // increasing the value in storage by 1
-        await saveStorageValue(NextDnrRuleId, nextDnrRuleId + 1);
+        await saveSyncValue(NextDnrRuleId, nextDnrRuleId + 1);
 
         return nextDnrRuleId;
     })

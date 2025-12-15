@@ -1,6 +1,6 @@
 // Copyright 2024 ETH Zurich, Ovgu
 
-import {getStorageValue, saveStorageValue} from "./shared/storage.js";
+import {getSyncValue, saveSyncValue} from "./shared/storage.js";
 
 const root = (typeof globalThis !== 'undefined') ? globalThis : self;
 
@@ -10,7 +10,7 @@ if (!root.database) {
 }
 
 const load = async () => {
-    const str = await getStorageValue("requests");
+    const str = await getSyncValue("requests");
     if (str && str !== "") {
         try {
             root.database = JSON.parse(str);
@@ -23,7 +23,7 @@ const load = async () => {
 }
 
 const save = async () => {
-    await saveStorageValue("requests", JSON.stringify(root.database));
+    await saveSyncValue("requests", JSON.stringify(root.database));
 }
 
 class DatabaseAdapter {

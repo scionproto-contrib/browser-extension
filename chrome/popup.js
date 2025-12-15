@@ -2,7 +2,7 @@
 'use strict';
 
 
-import {getStorageValue, saveStorageValue} from "./shared/storage.js";
+import {getSyncValue, saveSyncValue} from "./shared/storage.js";
 import {getRequestsDatabaseAdapter} from "./database.js";
 
 const DEFAULT_PROXY_SCHEME = "https"
@@ -409,7 +409,7 @@ document.getElementById('button-options').addEventListener('click', function () 
     chrome.tabs.create({'url': 'chrome://extensions/?options=' + chrome.runtime.id});
 });
 
-getStorageValue('perSiteStrictMode').then((val) => {
+getSyncValue('perSiteStrictMode').then((val) => {
     perSiteStrictMode = val || {};
     loadRequestInfo();
 });
@@ -642,7 +642,7 @@ function toggleExtensionRunning() {
         scionmode.innerHTML = "When available";
     }
 
-    saveStorageValue('perSiteStrictMode', newPerSiteStrictMode).then(() => {
+    saveSyncValue('perSiteStrictMode', newPerSiteStrictMode).then(() => {
         perSiteStrictMode = newPerSiteStrictMode;
     });
 
