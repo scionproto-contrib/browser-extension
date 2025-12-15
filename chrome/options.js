@@ -5,7 +5,7 @@
 'use strict';
 
 // Default proxy configuration values
-import {getSyncValue, saveSyncValue, toSet} from "./shared/storage.js";
+import {getSyncValue, saveSyncValue} from "./shared/storage.js";
 
 const DEFAULT_PROXY_SCHEME = 'https';
 const DEFAULT_PROXY_HOST = 'forward-proxy.scion.ethz.ch';
@@ -317,3 +317,9 @@ function saveAutoProxyConfig() {
       updateProxyFormState(autoConfig);
     });
   }
+
+function toSet(key) {
+    return new Promise(resolve => {
+        resolve(new Set(key));
+    });
+}

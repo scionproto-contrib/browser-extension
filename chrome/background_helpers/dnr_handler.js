@@ -1,5 +1,4 @@
-import {getSyncValue, saveSyncValue} from "../shared/storage.js";
-import {getRequestsDatabaseAdapter} from "../database.js";
+import {getRequests, getSyncValue, saveSyncValue} from "../shared/storage.js";
 import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD_URL} from "./proxy_handler.js";
 import {isHostScion} from "./request_interception_handler.js";
 
@@ -58,8 +57,7 @@ export async function setGlobalStrictMode(globalStrictMode) {
     // TODO: possibly improve this function by considering already existing rules and reusing them
     await removeAllDnrBlockRules();
     if (globalStrictMode) {
-        const databaseAdapter = await getRequestsDatabaseAdapter();
-        const requests = await databaseAdapter.get();
+        const requests = await getRequests();
 
         let allowedHostsWithId = [];
         let blockedHostsWithId = [];
@@ -101,8 +99,7 @@ export async function setPerSiteStrictMode(perSiteStrictMode) {
     const globalStrictMode = await getSyncValue("globalStrictMode");
     if (globalStrictMode) return;
 
-    const databaseAdapter = await getRequestsDatabaseAdapter();
-    const requests = await databaseAdapter.get();
+    const requests = await getRequests();
     let allowedHostsWithId = {};
     let blockedHostsWithId = {};
     for (const request of requests) {
@@ -131,8 +128,10 @@ export async function setPerSiteStrictMode(perSiteStrictMode) {
     // the individual rules above are insufficient, as a site marked as 'strict' can invoke other sub-resources that
     // should be blocked, but might have a different hostname and thus might not have a matching rule
     // thus, a redirect rule is needed that redirects all requests whose initiator is marked as 'strict'
-    const subresourceInitiatorRule = createSubResourcesInitiatorRedirectRule(SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID, strictHosts);
-    rules.push(subresourceInitiatorRule);
+    if (strictHosts.length > 0) {
+        const subresourceInitiatorRule = createSubResourcesInitiatorRedirectRule(SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID, strictHosts);
+        rules.push(subresourceInitiatorRule);
+    }
 
     await chrome.declarativeNetRequest.updateDynamicRules({addRules: rules, removeRuleIds: []});
 }

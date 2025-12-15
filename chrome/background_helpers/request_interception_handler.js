@@ -1,8 +1,7 @@
 import {proxyAddress, proxyHostResolveParam, proxyHostResolvePath, proxyURLResolvePath} from "./proxy_handler.js";
-import {getRequestsDatabaseAdapter} from "../database.js";
 import {addDnrAllowRule, addDnrBlockingRule, fetchNextDnrRuleId} from "./dnr_handler.js";
 import {policyCookie} from "./geofence_handler.js";
-import {getSyncValue} from "../shared/storage.js";
+import {addRequest, getSyncValue} from "../shared/storage.js";
 
 let isHostnameSCION = {};
 
@@ -79,7 +78,8 @@ function onHeadersReceived(details) {
         });
 
         async function asyncHelper() {
-            const dnrRuleId = await createDBEntry(targetUrl.hostname, details.initiator || "", details.tabId, scionEnabled);
+            const initiatorUrl = details.initiator ? new URL(details.initiator) : null;
+            const dnrRuleId = await createDBEntry(targetUrl.hostname, initiatorUrl?.hostname || "", scionEnabled);
             await handleAddDnrRule(targetUrl.hostname, dnrRuleId, scionEnabled);
         }
     }
@@ -135,8 +135,7 @@ async function createDBEntry(hostname, initiator, currentTabId, scionEnabled) {
         dnrRuleId: dnrRuleId, // set it to -1 by default (stays -1 for scion-enabled domains, otherwise gets assigned a proper rule id)
     };
 
-    const databaseAdapter = await getRequestsDatabaseAdapter();
-    await databaseAdapter.add(requestDBEntry, {
+    await addRequest(requestDBEntry, {
         mainDomain: requestDBEntry.mainDomain,
         scionEnabled: requestDBEntry.scionEnabled,
         domain: requestDBEntry.domain,
@@ -152,9 +151,13 @@ async function createDBEntry(hostname, initiator, currentTabId, scionEnabled) {
 async function handleAddDnrRule(hostname, dnrRuleId, scionEnabled) {
     const globalStrictMode = await getSyncValue("globalStrictMode");
     const perSiteStrictMode = await getSyncValue("perSiteStrictMode");
-    const strictHosts = Object.entries(perSiteStrictMode)
-        .filter(entry => entry.value)
-        .map(entry => entry.key);
+
+    let strictHosts = [];
+    if (perSiteStrictMode) {
+        strictHosts = Object.entries(perSiteStrictMode)
+            .filter(entry => entry.value)
+            .map(entry => entry.key);
+    }
 
     if (globalStrictMode || strictHosts.includes(hostname)) {
         if (scionEnabled) await addDnrAllowRule(hostname, dnrRuleId);

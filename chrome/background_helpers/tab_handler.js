@@ -1,4 +1,4 @@
-import {getRequestsDatabaseAdapter} from "../database.js";
+import {getRequests} from "../shared/storage.js";
 
 export function initializeTabListeners() {
     // User switches between tabs
@@ -19,8 +19,7 @@ export function initializeTabListeners() {
 async function handleTabChange(tab) {
     if (tab.active && tab.url) {
         const url = new URL(tab.url);
-        const databaseAdapter = await getRequestsDatabaseAdapter();
-        let requests = await databaseAdapter.get({ mainDomain: url.hostname });
+        let requests = await getRequests({ mainDomain: url.hostname });
         let mixedContent;
 
         const mainDomainSCIONEnabled = requests.find(r => r.tabId === tab.id && r.domain === url.hostname && r.scionEnabled);

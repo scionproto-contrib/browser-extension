@@ -2,8 +2,7 @@
 'use strict';
 
 
-import {getSyncValue, saveSyncValue} from "./shared/storage.js";
-import {getRequestsDatabaseAdapter} from "./database.js";
+import {getRequests, getSyncValue, saveSyncValue} from "./shared/storage.js";
 
 const DEFAULT_PROXY_SCHEME = "https"
 const DEFAULT_PROXY_HOST = "forward-proxy.scion.ethz.ch";
@@ -649,8 +648,6 @@ function toggleExtensionRunning() {
 }
 
 async function loadRequestInfo() {
-    const databaseAdapter = await getRequestsDatabaseAdapter();
-
     const checkedDomains = [];
     chrome.tabs.query({active: true, currentWindow: true}, async (tabs) => {
         var activeTab = tabs[0];
@@ -658,7 +655,7 @@ async function loadRequestInfo() {
         const url = new URL(activeTab.url);
         popupMainDomain = url.hostname;
 
-        let requests = await databaseAdapter.get({mainDomain: url.hostname});
+        let requests = await getRequests({mainDomain: url.hostname});
         const mainDomainSCIONEnabled = requests.find(r => r.tabId === activeTabId && r.domain === url.hostname && r.scionEnabled);
 
         if (perSiteStrictMode[url.hostname]) {
