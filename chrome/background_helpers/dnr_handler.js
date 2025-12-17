@@ -1,4 +1,4 @@
-import {getRequests, getSyncValue, saveSyncValue} from "../shared/storage.js";
+import {getRequests, getSyncValue} from "../shared/storage.js";
 import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD_URL} from "./proxy_handler.js";
 import {isHostScion} from "./request_interception_handler.js";
 
@@ -31,7 +31,6 @@ const SUBRESOURCES_REDIRECT_RULE_ID = 3;
 
 // sufficiently high to have space for custom DNR rules (specified above)
 const BLOCK_RULE_START_ID = 10000;
-const NextDnrRuleId = "nextDnrRuleId"
 const PerSiteStrictMode = "perSiteStrictMode";
 
 const EXT_PAGE = chrome.runtime.getURL('/checking.html');
@@ -46,12 +45,6 @@ const SUBRESOURCE_TYPES = ["sub_frame", "xmlhttprequest", "script", "image", "fo
  */
 export async function initializeDnr(globalStrictMode) {
     console.log("Initializing DNR");
-
-    // initialize NextDnrRuleId in sync storage (if not initialized already)
-    const nextDnrRuleId = await getSyncValue(NextDnrRuleId);
-    if (!nextDnrRuleId) {
-        await saveSyncValue(NextDnrRuleId, BLOCK_RULE_START_ID);
-    }
 
     await setGlobalStrictMode(globalStrictMode);
 }
