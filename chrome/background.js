@@ -5,7 +5,7 @@ import {initializeProxyHandler, loadProxySettings} from "./background_helpers/pr
 import {allowAllgeofence, geofence, resetPolicyCookie} from "./background_helpers/geofence_handler.js";
 import {getSyncValue, saveSyncValue} from "./shared/storage.js";
 import {initializeDnr, setGlobalStrictMode, setPerSiteStrictMode} from "./background_helpers/dnr_handler.js";
-import {initializeRequestInterceptionListeners, resetKnownHostnames} from "./background_helpers/request_interception_handler.js";
+import {initializeRequestInterceptionListeners} from "./background_helpers/request_interception_handler.js";
 import {initializeTabListeners} from "./background_helpers/tab_handler.js";
 
 
@@ -68,7 +68,6 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
             // Reload all proxy settings if any changed
             loadProxySettings();
 
-            resetKnownHostnames()
             resetPolicyCookie()
         }
     }

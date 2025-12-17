@@ -141,16 +141,4 @@ export async function addRequest(entry, replaceFilter = undefined) {
     await saveSyncValue(REQUESTS, JSON.stringify({requests}));
 }
 
-export async function updateRequest(requestId, newEntry) {
-    const requests = await loadRequests();
-    const entryIndex = requests.findIndex(requestEntry => requestEntry.requestId === requestId);
-    if (entryIndex < 0) return null;
-
-    const updatedRequest = {...requests[entryIndex], ...newEntry};
-    requests[entryIndex] = updatedRequest;
-
-    await saveSyncValue(REQUESTS, JSON.stringify({requests}));
-    return updatedRequest;
-}
-
 // =======================================

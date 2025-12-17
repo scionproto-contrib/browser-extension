@@ -1,9 +1,7 @@
 import {proxyAddress, proxyHostResolveParam, proxyHostResolvePath, proxyURLResolvePath} from "./proxy_handler.js";
-import {addDnrAllowRule, addDnrBlockingRule, fetchNextDnrRuleId} from "./dnr_handler.js";
+import {addDnrRule} from "./dnr_handler.js";
 import {policyCookie} from "./geofence_handler.js";
 import {addRequest, addTabResource, getSyncValue} from "../shared/storage.js";
-
-let isHostnameSCION = {};
 
 /**
  * General request interception concept:
@@ -19,13 +17,7 @@ export function initializeRequestInterceptionListeners() {
     // in manifest version 3 (MV3), the onAuthRequired is the only listener that still supports and accepts the 'blocking' extraInfoSpec
     chrome.webRequest.onAuthRequired.addListener(onAuthRequired, {urls: ["<all_urls>"]}, ['blocking']);
 
-    chrome.webRequest.onBeforeRedirect.addListener(onBeforeRedirect, {urls: ["<all_urls>"]});
-
     chrome.webRequest.onErrorOccurred.addListener(onErrorOccurred, {urls: ["<all_urls>"]});
-}
-
-export function resetKnownHostnames() {
-    isHostnameSCION = {};
 }
 
 export async function isHostScion(hostname, initiator, currentTabId) {
@@ -38,14 +30,13 @@ export async function isHostScion(hostname, initiator, currentTabId) {
         // the response text contains the SCION ISD path, or an empty string if the host is not
         // reachable through SCION
         scionEnabled = text !== "";
-        isHostnameSCION[hostname] = scionEnabled;
 
         // logging
         if (scionEnabled) console.log("[DB]: scion enabled (after resolve): ", hostname);
         else console.log("[DB]: scion disabled (after resolve): ", hostname);
 
-        const dnrRuleId = await createDBEntry(hostname, initiator, currentTabId, scionEnabled);
-        await handleAddDnrRule(hostname, dnrRuleId, scionEnabled);
+        await handleAddDnrRule(hostname, scionEnabled);
+        await createDBEntry(hostname, initiator, currentTabId, scionEnabled);
     } else {
         console.warn("[DB]: Resolution error: ", response.status);
     }
@@ -78,15 +69,14 @@ function onHeadersReceived(details) {
         if (scionEnabled) console.log("[onHeadersReceived]: scion enabled (after resolve): ", targetUrl.hostname);
         else console.log("[onHeadersReceived]: scion disabled (after resolve): ", targetUrl.hostname);
 
-        isHostnameSCION[targetUrl.hostname] = scionEnabled;
         asyncHelper().catch(reason => {
             console.error("[onHeadersReceived]: An error occurred during the creation of the DB entry or DNR rule: ", reason);
         });
 
         async function asyncHelper() {
             const initiatorUrl = details.initiator ? new URL(details.initiator) : null;
-            const dnrRuleId = await createDBEntry(targetUrl.hostname, initiatorUrl?.hostname || "", details.tabId, scionEnabled);
-            await handleAddDnrRule(targetUrl.hostname, dnrRuleId, scionEnabled);
+            await handleAddDnrRule(targetUrl.hostname, scionEnabled);
+            await createDBEntry(targetUrl.hostname, initiatorUrl?.hostname || "", details.tabId, scionEnabled);
         }
     }
 }
@@ -113,16 +103,6 @@ function onAuthRequired(details) {
     };
 }
 
-// Proxy returns a valid redirect response, meaning there is SCION enabled
-// and we can do this request again
-function onBeforeRedirect(details) {
-    if (details.redirectUrl && details.url.startsWith(`${proxyAddress}${proxyURLResolvePath}`)) {
-        console.log("<onBeforeRedirect> known scion (after resolve): ", details.redirectUrl)
-        const url = new URL(details.redirectUrl);
-        isHostnameSCION[url.hostname] = true;
-    }
-}
-
 function onErrorOccurred(details) {
     console.error("<onErrorOccurred>", details);
 }
@@ -131,13 +111,10 @@ function onErrorOccurred(details) {
  * Creates a DB entry for the provided `host` and returns the generated `dnrRuleId`.
  */
 async function createDBEntry(hostname, initiator, currentTabId, scionEnabled) {
-    const dnrRuleId = await fetchNextDnrRuleId();
     const requestDBEntry = {
-        requestId: dnrRuleId,
         domain: hostname,
         mainDomain: initiator,
         scionEnabled: scionEnabled,
-        dnrRuleId: dnrRuleId, // set it to -1 by default (stays -1 for scion-enabled domains, otherwise gets assigned a proper rule id)
     };
 
     await addRequest(requestDBEntry, {
@@ -147,27 +124,24 @@ async function createDBEntry(hostname, initiator, currentTabId, scionEnabled) {
     });
 
     if (currentTabId !== chrome.tabs.TAB_ID_NONE) await addTabResource(currentTabId, hostname, scionEnabled);
-
-    return dnrRuleId;
 }
 
 /**
  * Checks whether `globalStrictMode` or `perSiteStrictMode` for the provided `hostname` are enabled and,
  * if either is true, adds the rule depending on whether `scionEnabled` for this host.
  */
-async function handleAddDnrRule(hostname, dnrRuleId, scionEnabled) {
+async function handleAddDnrRule(hostname, scionEnabled) {
     const globalStrictMode = await getSyncValue("globalStrictMode");
     const perSiteStrictMode = await getSyncValue("perSiteStrictMode");
 
     let strictHosts = [];
     if (perSiteStrictMode) {
         strictHosts = Object.entries(perSiteStrictMode)
-            .filter(entry => entry.value)
-            .map(entry => entry.key);
+            .filter(([, isScion]) => isScion)
+            .map(([host]) => host);
     }
 
     if (globalStrictMode || strictHosts.includes(hostname)) {
-        if (scionEnabled) await addDnrAllowRule(hostname, dnrRuleId);
-        else await addDnrBlockingRule(hostname, dnrRuleId);
+        await addDnrRule(hostname, scionEnabled);
     }
 }
