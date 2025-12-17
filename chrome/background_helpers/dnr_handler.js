@@ -19,7 +19,7 @@ General DNR (DeclarativeNetRequest) strategy:
 Regarding safety of functions:
 The distribution of DNR rule IDs relies on first fetching the currently active rules, then
 searching for an unused ID and using that in a call to `chrome.declarativeNetRequest.updateDynamicRules()`.
-However, due to these calls being within an async function, there can be interleavings/races between
+However, due to these calls being within an async function, there can be data races between
 the fetch of active rules and the addition of a rule with the discovered unused ID, thus these
 actions must be wrapped with `withLock`.
  */
@@ -291,7 +291,9 @@ async function getNFreeIds(n) {
     return Array.from(idList.difference(usedIds));
 }
 
-// lock to prevent interleavings when generating block rule IDs since access to sync storage is async
+/**
+ * Lock to prevent data races when generating DNR rule IDs since access to `chrome.storage` is async.
+ */
 let idLock = Promise.resolve();
 
 function withLock(fn) {
