@@ -1,5 +1,8 @@
 // TODO: Wrap for Firefox to achieve same API
 
+export const GLOBAL_STRICT_MODE = "globalStrictMode";
+export const PER_SITE_STRICT_MODE = "perSiteStrictMode";
+
 export async function saveSyncValue(key, value) {
     await chrome.storage.sync.set({[key]: value});
 }

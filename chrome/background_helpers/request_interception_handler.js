@@ -1,7 +1,7 @@
 import {proxyAddress, proxyHostResolveParam, proxyHostResolvePath, proxyURLResolvePath} from "./proxy_handler.js";
 import {addDnrRule} from "./dnr_handler.js";
 import {policyCookie} from "./geofence_handler.js";
-import {addRequest, addTabResource, getSyncValue} from "../shared/storage.js";
+import {addRequest, addTabResource, clearTabResources, getRequests, getSyncValue, GLOBAL_STRICT_MODE, PER_SITE_STRICT_MODE} from "../shared/storage.js";
 
 /**
  * General request interception concept:
@@ -131,8 +131,8 @@ async function createDBEntry(hostname, initiator, currentTabId, scionEnabled) {
  * if either is true, adds the rule depending on whether `scionEnabled` for this host.
  */
 async function handleAddDnrRule(hostname, scionEnabled) {
-    const globalStrictMode = await getSyncValue("globalStrictMode");
-    const perSiteStrictMode = await getSyncValue("perSiteStrictMode");
+    const globalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);
+    const perSiteStrictMode = await getSyncValue(PER_SITE_STRICT_MODE);
 
     let strictHosts = [];
     if (perSiteStrictMode) {
