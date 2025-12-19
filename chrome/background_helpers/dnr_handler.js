@@ -1,4 +1,4 @@
-import {getRequests, getSyncValue, GLOBAL_STRICT_MODE, PER_SITE_STRICT_MODE} from "../shared/storage.js";
+import {getGlobalStrictMode, getPerSiteStrictMode, getRequests} from "../shared/storage.js";
 import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD_URL} from "./proxy_handler.js";
 import {isHostScion} from "./request_interception_handler.js";
 
@@ -54,7 +54,7 @@ export async function initializeDnr(globalStrictMode) {
  */
 export async function setGlobalStrictMode(globalStrictMode) {
     if (globalStrictMode) {
-        return withLock(async () => {
+        await withLock(async () => {
             await removeAllDnrBlockRules();
             const [allowedHostsWithId, blockedHostsWithId] = await getAllowedAndBlockedHostsWithId();
 
@@ -77,7 +77,7 @@ export async function setGlobalStrictMode(globalStrictMode) {
     } else {
         // only handle perSiteStrictMode if global mode is off, otherwise global overrides them anyway
         // fallback to empty dictionary if no value was present in storage
-        const perSiteStrictMode = await getSyncValue(PER_SITE_STRICT_MODE) || {};
+        const perSiteStrictMode = await getPerSiteStrictMode() || {};
         await setPerSiteStrictMode(perSiteStrictMode);
     }
 }
@@ -87,10 +87,10 @@ export async function setGlobalStrictMode(globalStrictMode) {
  */
 export async function setPerSiteStrictMode(perSiteStrictMode) {
     // if globalStrictMode is on, do not change any DNR rules
-    const globalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);
+    const globalStrictMode = await getGlobalStrictMode();
     if (globalStrictMode) return;
 
-    return withLock(async () => {
+    await withLock(async () => {
         const [allowedHostsWithId, blockedHostsWithId] = await getAllowedAndBlockedHostsWithId();
 
         await removeAllDnrBlockRules();
@@ -107,7 +107,7 @@ export async function setPerSiteStrictMode(perSiteStrictMode) {
             else {
                 // using chrome.tabs.TAB_ID_NONE as the tab id, as no tab can be associated with this request
                 // isHostScion already adds the appropriate DNR rules based on the lookup result (including creating the DB entry for the host)
-                await isHostScion(strictHost, "", chrome.tabs.TAB_ID_NONE);
+                await isHostScion(strictHost, strictHost, chrome.tabs.TAB_ID_NONE, true);
             }
         }
 
@@ -126,12 +126,17 @@ export async function setPerSiteStrictMode(perSiteStrictMode) {
 /**
  * Based on `scionEnabled` creates a DNR allow or block rule for the `host`.
  */
-export async function addDnrRule(host, scionEnabled) {
-    return withLock(async () => {
+export async function addDnrRule(host, scionEnabled, alreadyHasLock) {
+    const run = async () => {
         const id = (await getNFreeIds(1))[0];
         const rule = scionEnabled ? createAllowRule(host, id) : createBlockRule(host, id);
         await chrome.declarativeNetRequest.updateDynamicRules({addRules: [rule], removeRuleIds: []})
-    });
+    };
+    if (alreadyHasLock) {
+        await run();
+        return;
+    }
+    await withLock(run);
 }
 
 /**

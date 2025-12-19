@@ -1,4 +1,4 @@
-import {getSyncValue} from "../shared/storage.js";
+import {getIsdWhitelist} from "../shared/storage.js";
 import {proxyAddress, proxyHost, proxyPolicyPath, proxyScheme} from "./proxy_handler.js";
 
 export let policyCookie = null;
@@ -15,7 +15,7 @@ export function allowAllgeofence(allowAll) {
         return
     }
 
-    getSyncValue('isd_whitelist').then((isdSet) => {
+    getIsdWhitelist().then((isdSet) => {
         console.log(isdSet)
         geofence(isdSet);
     });

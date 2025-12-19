@@ -1,35 +1,51 @@
-// TODO: Wrap for Firefox to achieve same API
+// ===== STORAGE WRAPPER FUNCTIONS =====
+// mostly useful for better type annotations in typescript
+import {handleTabChange} from "../background_helpers/tab_handler.js";
 
-export const GLOBAL_STRICT_MODE = "globalStrictMode";
-export const PER_SITE_STRICT_MODE = "perSiteStrictMode";
+const GLOBAL_STRICT_MODE = "globalStrictMode";
+const PER_SITE_STRICT_MODE = "perSiteStrictMode";
+const ISD_WHITELIST = "isd_whitelist";
+const ISD_ALL = "isd_all";
+const EXTENSION_RUNNING = "extension_running";
 
-export async function saveSyncValue(key, value) {
-    await chrome.storage.sync.set({[key]: value});
+export async function getGlobalStrictMode() {
+    return await getSyncValue(GLOBAL_STRICT_MODE);
 }
 
-export async function getSyncValue(key) {
-    const result = await chrome.storage.sync.get([key]);
-    return result[key];
+export async function saveGlobalStrictMode(globalStrictMode) {
+    await saveSyncValue(GLOBAL_STRICT_MODE, globalStrictMode);
 }
 
-export async function saveLocalValue(key, value) {
-    await chrome.storage.local.set({[key]: value});
+export async function getPerSiteStrictMode() {
+    return await getSyncValue(PER_SITE_STRICT_MODE);
 }
 
-export async function getLocalValue(key) {
-    const result = await chrome.storage.local.get([key]);
-    return result[key];
+export async function savePerSiteStrictMode(perSiteStrictMode) {
+    await saveSyncValue(PER_SITE_STRICT_MODE, perSiteStrictMode);
 }
 
-async function getAllLocalValues() {
-    return await chrome.storage.local.get();
+export async function getIsdWhitelist() {
+    return await getSyncValue(ISD_WHITELIST);
 }
 
-async function removeLocalValues(keys) {
-    await chrome.storage.local.remove(keys);
+export async function saveIsdWhitelist(isdWhitelist) {
+    await saveSyncValue(ISD_WHITELIST, isdWhitelist);
 }
 
-// ===== LOCAL STORAGE TAB_ID MAP =====
+export async function getIsdAll() {
+    return await getSyncValue(ISD_ALL);
+}
+
+export async function saveIsdAll(isdAll) {
+    await saveSyncValue(ISD_ALL, isdAll);
+}
+
+export async function getExtensionRunning() {
+    return await getSyncValue(EXTENSION_RUNNING);
+}
+// =====================================
+
+// ===== LOCAL STORAGE TAB RESOURCES =====
 /*
 Instead of keeping a map in a single key in local storage as done with the requests, here
 each host for each tab is its own key to a boolean indicating whether the host is scion-capable.
@@ -64,11 +80,11 @@ function getTabResourceKeyPrefix(tabId) {
  * Returns an empty list if there is no entry for the `tabId`.
  */
 export async function getTabResources(tabId) {
-    const localData = await getAllLocalValues();
+    const sessionData = await getAllSessionValues();
     const prefix = getTabResourceKeyPrefix(tabId);
     const result = [];
 
-    for (const [key, value] of Object.entries(localData)) {
+    for (const [key, value] of Object.entries(sessionData)) {
         if (!key.startsWith(prefix)) continue;
 
         const encodedHostname = key.slice(prefix.length);
@@ -85,12 +101,12 @@ export async function getTabResources(tabId) {
  * Removes all the entries for the `tabId`.
  */
 export async function clearTabResources(tabId) {
-    const all = await getAllLocalValues();
+    const all = await getAllSessionValues();
     const prefix = getTabResourceKeyPrefix(tabId);
 
     const keysToRemove = Object.keys(all).filter(key => key.startsWith(prefix));
     if (keysToRemove.length > 0) {
-        await removeLocalValues(keysToRemove);
+        await removeSessionValues(keysToRemove);
     }
 }
 
@@ -98,10 +114,10 @@ export async function clearTabResources(tabId) {
  * Removes all entries for all tabs.
  */
 export async function clearAllTabResources() {
-    const all = await getAllLocalValues();
+    const all = await getAllSessionValues();
     const keysToRemove = Object.keys(all).filter(key => key.startsWith(TAB_RESOURCE_PREFIX));
     if (keysToRemove.length > 0) {
-        await removeLocalValues(keysToRemove);
+        await removeSessionValues(keysToRemove);
     }
 }
 
@@ -111,15 +127,20 @@ export async function clearAllTabResources() {
 export async function addTabResource(tabId, resourceHostname, resourceHostScionEnabled) {
     const key = getHostResourceKey(tabId, resourceHostname);
 
-    const existing = await getLocalValue(key);
+    const existing = await getSessionValue(key);
     if (existing && existing[key] !== undefined) return;
 
-    await saveLocalValue(key, resourceHostScionEnabled);
+    await saveSessionValue(key, resourceHostScionEnabled);
+
+    // in case a website needs to verify its scion capability and this information arrives after tabs.onUpdated or tabs.onActivated,
+    // this call ensures the icon is updated properly (which is used to display the info on the popup)
+    const tab = await chrome.tabs.get(tabId);
+    await handleTabChange(tab);
 }
 
 // ====================================
 
-// ===== SYNC STORAGE REQUESTS ENTRY =====
+// ===== REQUESTS ENTRY =====
 // Data races are not a real concern for the requests table, as this is not something the user will see/notice.
 // Instead, if a race causes the result of one lookup to be lost, the extension will continue operating as normal
 // and will simply refetch that resource later on if it is requested again (since the entry does not exist, from
@@ -129,7 +150,7 @@ const REQUESTS = "requests";
 const MAX_REQUEST_ENTRIES = 50; // keep list small (sync storage quota)
 
 async function loadRequests() {
-    const serializedRequests = await getSyncValue(REQUESTS);
+    const serializedRequests = await getLocalValue(REQUESTS);
     if (serializedRequests && serializedRequests !== "") {
         try {
             const requestsObject = JSON.parse(serializedRequests);
@@ -194,7 +215,42 @@ export async function addRequest(entry, replaceFilter = undefined) {
         }
     }
 
-    await saveSyncValue(REQUESTS, JSON.stringify({requests}));
+    await saveLocalValue(REQUESTS, JSON.stringify({requests}));
+}
+// ==========================
+
+// ===== CHROME STORAGE WRAPPER FUNCTIONS =====
+async function saveSyncValue(key, value) {
+    await chrome.storage.sync.set({[key]: value});
 }
 
-// =======================================
+async function getSyncValue(key) {
+    const result = await chrome.storage.sync.get([key]);
+    return result[key];
+}
+
+async function saveLocalValue(key, value) {
+    await chrome.storage.local.set({[key]: value});
+}
+
+async function getLocalValue(key) {
+    const result = await chrome.storage.local.get([key]);
+    return result[key];
+}
+
+async function saveSessionValue(key, value) {
+    await chrome.storage.session.set({[key]: value});
+}
+
+async function getSessionValue(key) {
+    const result = await chrome.storage.session.get([key]);
+    return result[key];
+}
+
+async function getAllSessionValues() {
+    return await chrome.storage.session.get();
+}
+
+async function removeSessionValues(keys) {
+    await chrome.storage.session.remove(keys);
+}

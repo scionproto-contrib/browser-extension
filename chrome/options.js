@@ -5,7 +5,7 @@
 'use strict';
 
 // Default proxy configuration values
-import {getSyncValue, saveSyncValue} from "./shared/storage.js";
+import {getGlobalStrictMode, getIsdAll, getIsdWhitelist, getPerSiteStrictMode, saveGlobalStrictMode, saveIsdAll, saveIsdWhitelist, savePerSiteStrictMode} from "./shared/storage.js";
 
 const DEFAULT_PROXY_SCHEME = 'https';
 const DEFAULT_PROXY_HOST = 'forward-proxy.scion.ethz.ch';
@@ -45,10 +45,10 @@ const tableSitePreferencesRow = `
 const placeholderToggleID = "toggleISD-";
 
 document.addEventListener("DOMContentLoaded", async () => {
-    const isdSet = await getSyncValue("isd_whitelist");
+    const isdSet = await getIsdWhitelist();
     displayToggleISD(isdSet);
 
-    document.getElementById("allowAllTrafficToggle").checked = await getSyncValue("isd_all");
+    document.getElementById("allowAllTrafficToggle").checked = await getIsdAll();
 
     registerToggleISDHandler();
     registerToggleAllHandler();
@@ -97,12 +97,12 @@ async function toggleAll(checked_id) {
     var isdToggle = document.getElementById(checked_id);
     isdToggle.checked = !isdToggle.checked;
     console.log(isdToggle.checked)
-    await saveSyncValue('isd_all', isdToggle.checked);
+    await saveIsdAll(isdToggle.checked);
 }
 
 
 async function applyWhitelist(isd, checked) {
-    const isdList = await getSyncValue('isd_whitelist');
+    const isdList = await getIsdWhitelist();
     const isdSet = await toSet(removeEmptyEntries(isdList));
     if (checked) {
         isdSet.add(isd);
@@ -112,7 +112,7 @@ async function applyWhitelist(isd, checked) {
         console.log('Delete isd to list: ' + isd);
     }
     const isdSet_1 = isdSet;
-    await saveSyncValue('isd_whitelist', [...isdSet_1]);
+    await saveIsdWhitelist([...isdSet_1]);
     console.log([...isdSet_1]);
 }
 
@@ -145,10 +145,10 @@ function toggleGlobalStrictMode() {
     } else {
         lineStrictMode.style.backgroundColor = '#cccccc';
     }
-    saveSyncValue('globalStrictMode', toggleGlobalStrict.checked);
+    saveGlobalStrictMode(toggleGlobalStrict.checked);
 }
 
-getSyncValue('globalStrictMode').then(val => {
+getGlobalStrictMode().then(val => {
     toggleGlobalStrict.checked = val;
     if (toggleGlobalStrict.checked) {
         lineStrictMode.style.backgroundColor = '#48bb78';
@@ -158,7 +158,7 @@ getSyncValue('globalStrictMode').then(val => {
 });
 
 function updateSitePreferences() {
-    getSyncValue('perSiteStrictMode').then(perSiteStrictMode => {
+    getPerSiteStrictMode().then(perSiteStrictMode => {
         tableSitePreferences.innerHTML = '';
         Object.keys(perSiteStrictMode || {}).forEach(k => {
             let row = tableSitePreferencesRow.replaceAll("{site}", k);
@@ -187,9 +187,9 @@ function toggleSitePreference(checked_id) {
     const isdToggle = document.getElementById(checked_id);
     isdToggle.checked = !isdToggle.checked;
     const domain = checked_id.split("toggleSite-")[1];
-    getSyncValue('perSiteStrictMode').then(val => {
+    getPerSiteStrictMode().then(val => {
         val[domain] = isdToggle.checked;
-        saveSyncValue('perSiteStrictMode', val).then(() => {
+        savePerSiteStrictMode(val).then(() => {
             updateSitePreferences();
         });
     });
@@ -204,13 +204,13 @@ buttonAddHostname
     .addEventListener('click', function () {
         const domain = document.getElementById('inputNewDomain').value;
         const strictMode = !!toggleNewDomainStrictMode.checked;
-        getSyncValue('perSiteStrictMode').then(val => {
+        getPerSiteStrictMode().then(val => {
             let perSiteStrictMode = {};
             if (val) {
                 perSiteStrictMode = val;
             }
             perSiteStrictMode[domain] = strictMode;
-            saveSyncValue('perSiteStrictMode', perSiteStrictMode).then(() => {
+            savePerSiteStrictMode(perSiteStrictMode).then(() => {
                 updateSitePreferences();
                 toggleNewDomainStrictMode.checked = false;
                 inputNewDomain.value = '';

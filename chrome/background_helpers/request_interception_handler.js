@@ -1,7 +1,7 @@
 import {proxyAddress, proxyHostResolveParam, proxyHostResolvePath, proxyURLResolvePath} from "./proxy_handler.js";
 import {addDnrRule} from "./dnr_handler.js";
 import {policyCookie} from "./geofence_handler.js";
-import {addRequest, addTabResource, clearTabResources, getRequests, getSyncValue, GLOBAL_STRICT_MODE, PER_SITE_STRICT_MODE} from "../shared/storage.js";
+import {addRequest, addTabResource, clearTabResources, getGlobalStrictMode, getPerSiteStrictMode, getRequests} from "../shared/storage.js";
 
 /**
  * General request interception concept:
@@ -22,7 +22,7 @@ export function initializeRequestInterceptionListeners() {
     chrome.webNavigation.onCommitted.addListener(onCommitted);
 }
 
-export async function isHostScion(hostname, initiator, currentTabId) {
+export async function isHostScion(hostname, initiator, currentTabId, alreadyHasLock = false) {
     let scionEnabled = false;
 
     const fetchUrl = `${proxyAddress}${proxyHostResolvePath}?${proxyHostResolveParam}=${hostname}`;
@@ -37,7 +37,7 @@ export async function isHostScion(hostname, initiator, currentTabId) {
         if (scionEnabled) console.log("[DB]: scion enabled (after resolve): ", hostname);
         else console.log("[DB]: scion disabled (after resolve): ", hostname);
 
-        await handleAddDnrRule(hostname, scionEnabled);
+        await handleAddDnrRule(hostname, scionEnabled, alreadyHasLock);
         await createDBEntry(hostname, initiator, currentTabId, scionEnabled);
     } else {
         console.warn("[DB]: Resolution error: ", response.status);
@@ -46,9 +46,6 @@ export async function isHostScion(hostname, initiator, currentTabId) {
     console.log("[DB]: Resolution returned that host is scion-capable: ", scionEnabled);
     return scionEnabled;
 }
-
-// TODO: figure out if there is a simple solution to prevent resources called by non-scion subresources to be shown (since these would not be shown in strict mode)
-//  although, is this necessarily a bad thing if those are shown? maybe ask supervisors what they think...
 
 // map that maps tabId to promises (which act as locks)
 const perTabLocks = new Map();
@@ -99,7 +96,6 @@ function safeInitiatorHostname(initiator) {
 }
 
 function onCommitted(details) {
-    console.log("[onCommitted]", details);
     if (details.tabId < 0) return;
 
     // this logic here most likely ignores iframes...
@@ -116,7 +112,6 @@ function onCommitted(details) {
 }
 
 function onBeforeRequest(details) {
-    console.log("[onBeforeRequest]", details);
     const tabId = details.tabId;
     if (tabId === chrome.tabs.TAB_ID_NONE || tabId < 0) return;
 
@@ -154,12 +149,13 @@ function onBeforeRequest(details) {
             // also accepted and handled
         } else {
             // reject cases where the documentId and initiator do not match
+            console.log("[onBeforeRequest]: Seems to be a request unrelated to the current tab: ", details);
             return;
         }
 
         // ===== CREATE TAB RESOURCES ENTRY =====
-        const globalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);
-        const perSiteStrictMode = (await getSyncValue(PER_SITE_STRICT_MODE)) || {};
+        const globalStrictMode = await getGlobalStrictMode();
+        const perSiteStrictMode = (await getPerSiteStrictMode()) || {};
 
         const requests = await getRequests();
         const hostnameScionEnabled = requests.find((request) => request.domain === hostname)?.scionEnabled;
@@ -170,8 +166,14 @@ function onBeforeRequest(details) {
 
         if (globalStrictMode || (strictKey && perSiteStrictMode[strictKey])) {
             // if it has not been discovered previously, ignore it since the DNR redirect rule will catch it
-            // in strict mode and then perform the lookup
-            if (hostnameScionEnabled === undefined) return;
+            // in strict mode and then perform the lookup (or in case of perSiteStrictMode, the lookup is already
+            // performed if the user enters an unknown url there)
+            if (hostnameScionEnabled === undefined) {
+                console.log(`[onBeforeRequest]: Strict mode enabled and host '${hostname}' unknown, skipping to let redirect handle it.`);
+                return;
+            }
+
+            console.log(`[onBeforeRequest]: Strict mode enabled, host '${hostname}' is known to be scion: ${hostnameScionEnabled}`);
 
             // however, for previously discovered hostnames, we do need to add the resource here manually, since
             // the higher-priority DNR rule will otherwise capture it and bypass the redirect-lookup-add chain
@@ -179,11 +181,14 @@ function onBeforeRequest(details) {
 
         } else {
             if (hostnameScionEnabled === undefined) {
+                console.log(`[onBeforeRequest]: Strict mode disabled, host '${hostname}' is unknown, lookup is performed.`);
+
                 // perform a lookup for the host, if it has not been discovered previously and strict mode is off
                 await isHostScion(hostname, initiatorHostname ?? hostname, tabId);
                 return;
             }
 
+            console.log(`[onBeforeRequest]: Strict mode disabled, host '${hostname}' is known to be scion: ${hostnameScionEnabled}`);
             await addTabResource(tabId, hostname, hostnameScionEnabled);
         }
     });
@@ -214,8 +219,9 @@ function onHeadersReceived(details) {
         });
 
         async function asyncHelper() {
-            const initiatorUrl = details.initiator ? new URL(details.initiator) : null;
-            await handleAddDnrRule(targetUrl.hostname, scionEnabled);
+            const initiatorUrl = safeInitiatorHostname(details.initiator);
+            // const initiatorUrl = details.initiator ? new URL(details.initiator) : null;
+            await handleAddDnrRule(targetUrl.hostname, scionEnabled, false);
             await createDBEntry(targetUrl.hostname, initiatorUrl?.hostname || "", details.tabId, scionEnabled);
         }
     }
@@ -270,9 +276,9 @@ async function createDBEntry(hostname, initiator, currentTabId, scionEnabled) {
  * Checks whether `globalStrictMode` or `perSiteStrictMode` for the provided `hostname` are enabled and,
  * if either is true, adds the rule depending on whether `scionEnabled` for this host.
  */
-async function handleAddDnrRule(hostname, scionEnabled) {
-    const globalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);
-    const perSiteStrictMode = await getSyncValue(PER_SITE_STRICT_MODE);
+async function handleAddDnrRule(hostname, scionEnabled, alreadyHasLock) {
+    const globalStrictMode = await getGlobalStrictMode();
+    const perSiteStrictMode = await getPerSiteStrictMode();
 
     let strictHosts = [];
     if (perSiteStrictMode) {
@@ -282,6 +288,6 @@ async function handleAddDnrRule(hostname, scionEnabled) {
     }
 
     if (globalStrictMode || strictHosts.includes(hostname)) {
-        await addDnrRule(hostname, scionEnabled);
+        await addDnrRule(hostname, scionEnabled, alreadyHasLock);
     }
 }

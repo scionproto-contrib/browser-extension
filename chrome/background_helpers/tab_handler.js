@@ -46,7 +46,7 @@ export function initializeTabListeners() {
 
 // Displays a green/blue SCION icon depending on the current url is
 // being forwarded via SCION
-async function handleTabChange(tab) {
+export async function handleTabChange(tab) {
     if (tab.active && tab.url) {
         const url = new URL(tab.url);
 
