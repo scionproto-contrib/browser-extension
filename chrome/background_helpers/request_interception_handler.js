@@ -18,6 +18,8 @@ export function initializeRequestInterceptionListeners() {
     chrome.webRequest.onAuthRequired.addListener(onAuthRequired, {urls: ["<all_urls>"]}, ['blocking']);
 
     chrome.webRequest.onErrorOccurred.addListener(onErrorOccurred, {urls: ["<all_urls>"]});
+
+    chrome.webNavigation.onCommitted.addListener(onCommitted);
 }
 
 export async function isHostScion(hostname, initiator, currentTabId) {
@@ -45,8 +47,146 @@ export async function isHostScion(hostname, initiator, currentTabId) {
     return scionEnabled;
 }
 
+// TODO: figure out if there is a simple solution to prevent resources called by non-scion subresources to be shown (since these would not be shown in strict mode)
+//  although, is this necessarily a bad thing if those are shown? maybe ask supervisors what they think...
+
+// map that maps tabId to promises (which act as locks)
+const perTabLocks = new Map();
+
+function withTabLock(tabId, fn) {
+    const prev = perTabLocks.get(tabId) ?? Promise.resolve();
+    const next = prev
+        .catch(() => {
+        })
+        .then(fn)
+        .finally(() => {
+            if (perTabLocks.get(tabId) === next) perTabLocks.delete(tabId);
+        });
+    perTabLocks.set(tabId, next);
+    return next;
+}
+
+// map that maps the tabId to a state (of type: { gen, topOrigin, currentDocumentId }
+const tabState = new Map();
+
+function safeHostname(url) {
+    try {
+        const u = new URL(url);
+        // ignore internal or otherwise undesired requests
+        if (u.protocol === "chrome-extension:" || u.protocol === "chrome:" || u.protocol === "about:" || u.protocol === "data:" || u.protocol === "blob:") {
+            return null;
+        }
+        return u.hostname || null;
+    } catch {
+        return null;
+    }
+}
+
+function safeOrigin(url) {
+    try {
+        return new URL(url).origin;
+    } catch {
+        return null;
+    }
+}
+
+function safeInitiatorHostname(initiator) {
+    try {
+        return initiator ? new URL(initiator).hostname : null;
+    } catch {
+        return null;
+    }
+}
+
+function onCommitted(details) {
+    console.log("[onCommitted]", details);
+    if (details.tabId < 0) return;
+
+    // this logic here most likely ignores iframes...
+    if (details.frameId !== 0) return;
+
+    withTabLock(details.tabId, async () => {
+        const state = tabState.get(details.tabId) ?? {gen: 0, topOrigin: null, currentDocId: null};
+        tabState.set(details.tabId, {
+            ...state,
+            topOrigin: safeOrigin(details.url),
+            currentDocId: details.documentId ?? null,
+        });
+    });
+}
+
 function onBeforeRequest(details) {
-    // TODO: additionally, create the entries through addTabResource here too (for those hosts where we know whether they are scion or not (those in sync storage), since for the others, a lookup and then add-call will be performed anyway)
+    console.log("[onBeforeRequest]", details);
+    const tabId = details.tabId;
+    if (tabId === chrome.tabs.TAB_ID_NONE || tabId < 0) return;
+
+    const hostname = safeHostname(details.url);
+    if (!hostname) return;
+
+    withTabLock(tabId, async () => {
+        let state = tabState.get(tabId) ?? {gen: 0, topOrigin: null, currentDocId: null};
+
+        // if a mainframe is detected, immediately reset the tab resources (since a new page was opened in an existing tab,
+        // thus previous information should be removed)
+        if (details.type === "main_frame") {
+            state = {gen: state.gen + 1, topOrigin: safeOrigin(details.url), currentDocId: null};
+            tabState.set(tabId, state);
+            await clearTabResources(tabId);
+
+            // from testing, mainframe requests usually did not contain a documentId, onCommitted mainframe requests
+            // however do, so we handle setting the new documentId in the onCommitted method as it is generally invoked
+            // before onBeforeRequest anyway
+        }
+
+        // ignore requests if the documentId does not match the one observed in onCommitted
+        // If the case (was never the case in testing) should occur where onCommitted is invoked after a subresource
+        // invokes onBeforeRequest, it is currently ignored. A future fix would be keep a buffer of non-matching requests.
+        // Due to results from testing and simplicity (since this is purely for UI information), it was left out for now.
+        const docId = details.documentId ?? null;
+        const currentDocId = state.currentDocId;
+
+        // note that the two following if-statements are intentionally left empty for improved structure/documentation
+        if (currentDocId && docId && docId === currentDocId) {
+            // accept and handle request if the documentId matches the committed documentId stored in the state
+        } else if (currentDocId && !docId && state.topOrigin && details.initiator === state.topOrigin) {
+            // fallback solution in case a request does not contain a documentId at all:
+            // if the initiator matches the url that was present in the onCommitted call of the mainframe, that is
+            // also accepted and handled
+        } else {
+            // reject cases where the documentId and initiator do not match
+            return;
+        }
+
+        // ===== CREATE TAB RESOURCES ENTRY =====
+        const globalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);
+        const perSiteStrictMode = (await getSyncValue(PER_SITE_STRICT_MODE)) || {};
+
+        const requests = await getRequests();
+        const hostnameScionEnabled = requests.find((request) => request.domain === hostname)?.scionEnabled;
+
+        const initiatorHostname = safeInitiatorHostname(details.initiator);
+        // for mainframe, check the hostname, for subresources check the initiator whether it is set to strict
+        const strictKey = details.type === "main_frame" ? hostname : initiatorHostname;
+
+        if (globalStrictMode || (strictKey && perSiteStrictMode[strictKey])) {
+            // if it has not been discovered previously, ignore it since the DNR redirect rule will catch it
+            // in strict mode and then perform the lookup
+            if (hostnameScionEnabled === undefined) return;
+
+            // however, for previously discovered hostnames, we do need to add the resource here manually, since
+            // the higher-priority DNR rule will otherwise capture it and bypass the redirect-lookup-add chain
+            await addTabResource(tabId, hostname, hostnameScionEnabled);
+
+        } else {
+            if (hostnameScionEnabled === undefined) {
+                // perform a lookup for the host, if it has not been discovered previously and strict mode is off
+                await isHostScion(hostname, initiatorHostname ?? hostname, tabId);
+                return;
+            }
+
+            await addTabResource(tabId, hostname, hostnameScionEnabled);
+        }
+    });
 }
 
 // Skip answers on a resolve request with a status code 500 if the host is not scion capable
