@@ -1,4 +1,4 @@
-import {getGlobalStrictMode, getPerSiteStrictMode, getRequests} from "../shared/storage.js";
+import {getRequests, getSyncValue, GLOBAL_STRICT_MODE, PER_SITE_STRICT_MODE} from "../shared/storage.js";
 import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD_URL} from "./proxy_handler.js";
 import {isHostScion} from "./request_interception_handler.js";
 
@@ -77,7 +77,7 @@ export async function setGlobalStrictMode(globalStrictMode) {
     } else {
         // only handle perSiteStrictMode if global mode is off, otherwise global overrides them anyway
         // fallback to empty dictionary if no value was present in storage
-        const perSiteStrictMode = await getPerSiteStrictMode() || {};
+        const perSiteStrictMode = await getSyncValue(PER_SITE_STRICT_MODE) || {};
         await setPerSiteStrictMode(perSiteStrictMode);
     }
 }
@@ -87,7 +87,7 @@ export async function setGlobalStrictMode(globalStrictMode) {
  */
 export async function setPerSiteStrictMode(perSiteStrictMode) {
     // if globalStrictMode is on, do not change any DNR rules
-    const globalStrictMode = await getGlobalStrictMode();
+    const globalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);
     if (globalStrictMode) return;
 
     await withLock(async () => {

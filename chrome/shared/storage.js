@@ -1,49 +1,10 @@
-// ===== STORAGE WRAPPER FUNCTIONS =====
-// mostly useful for better type annotations in typescript
 import {handleTabChange} from "../background_helpers/tab_handler.js";
 
-const GLOBAL_STRICT_MODE = "globalStrictMode";
-const PER_SITE_STRICT_MODE = "perSiteStrictMode";
-const ISD_WHITELIST = "isd_whitelist";
-const ISD_ALL = "isd_all";
-const EXTENSION_RUNNING = "extension_running";
-
-export async function getGlobalStrictMode() {
-    return await getSyncValue(GLOBAL_STRICT_MODE);
-}
-
-export async function saveGlobalStrictMode(globalStrictMode) {
-    await saveSyncValue(GLOBAL_STRICT_MODE, globalStrictMode);
-}
-
-export async function getPerSiteStrictMode() {
-    return await getSyncValue(PER_SITE_STRICT_MODE);
-}
-
-export async function savePerSiteStrictMode(perSiteStrictMode) {
-    await saveSyncValue(PER_SITE_STRICT_MODE, perSiteStrictMode);
-}
-
-export async function getIsdWhitelist() {
-    return await getSyncValue(ISD_WHITELIST);
-}
-
-export async function saveIsdWhitelist(isdWhitelist) {
-    await saveSyncValue(ISD_WHITELIST, isdWhitelist);
-}
-
-export async function getIsdAll() {
-    return await getSyncValue(ISD_ALL);
-}
-
-export async function saveIsdAll(isdAll) {
-    await saveSyncValue(ISD_ALL, isdAll);
-}
-
-export async function getExtensionRunning() {
-    return await getSyncValue(EXTENSION_RUNNING);
-}
-// =====================================
+export const GLOBAL_STRICT_MODE = "globalStrictMode";
+export const PER_SITE_STRICT_MODE = "perSiteStrictMode";
+export const ISD_WHITELIST = "isd_whitelist";
+export const ISD_ALL = "isd_all";
+export const EXTENSION_RUNNING = "extension_running";
 
 // ===== LOCAL STORAGE TAB RESOURCES =====
 /*
@@ -220,11 +181,11 @@ export async function addRequest(entry, replaceFilter = undefined) {
 // ==========================
 
 // ===== CHROME STORAGE WRAPPER FUNCTIONS =====
-async function saveSyncValue(key, value) {
+export async function saveSyncValue(key, value) {
     await chrome.storage.sync.set({[key]: value});
 }
 
-async function getSyncValue(key) {
+export async function getSyncValue(key) {
     const result = await chrome.storage.sync.get([key]);
     return result[key];
 }

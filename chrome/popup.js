@@ -2,7 +2,7 @@
 'use strict';
 
 
-import {getPerSiteStrictMode, getTabResources, savePerSiteStrictMode} from "./shared/storage.js";
+import {getSyncValue, getTabResources, PER_SITE_STRICT_MODE, saveSyncValue} from "./shared/storage.js";
 
 const DEFAULT_PROXY_SCHEME = "https"
 const DEFAULT_PROXY_HOST = "forward-proxy.scion.ethz.ch";
@@ -408,7 +408,7 @@ document.getElementById('button-options').addEventListener('click', function () 
     chrome.tabs.create({'url': 'chrome://extensions/?options=' + chrome.runtime.id});
 });
 
-getPerSiteStrictMode().then((val) => {
+getSyncValue(PER_SITE_STRICT_MODE).then((val) => {
     perSiteStrictMode = val || {};
     loadRequestInfo();
 });
@@ -641,7 +641,7 @@ function toggleExtensionRunning() {
         scionmode.innerHTML = "When available";
     }
 
-    savePerSiteStrictMode(newPerSiteStrictMode).then(() => {
+    saveSyncValue(PER_SITE_STRICT_MODE, newPerSiteStrictMode).then(() => {
         perSiteStrictMode = newPerSiteStrictMode;
     });
 

@@ -3,19 +3,19 @@
 
 import {initializeProxyHandler, loadProxySettings} from "./background_helpers/proxy_handler.js";
 import {allowAllgeofence, geofence, resetPolicyCookie} from "./background_helpers/geofence_handler.js";
-import {getExtensionRunning, getGlobalStrictMode} from "./shared/storage.js";
+import {EXTENSION_RUNNING, getSyncValue, GLOBAL_STRICT_MODE, saveSyncValue} from "./shared/storage.js";
 import {initializeDnr, setGlobalStrictMode, setPerSiteStrictMode} from "./background_helpers/dnr_handler.js";
 import {initializeRequestInterceptionListeners} from "./background_helpers/request_interception_handler.js";
 import {initializeTabListeners} from "./background_helpers/tab_handler.js";
 
 /*--- setup ------------------------------------------------------------------*/
 
-getGlobalStrictMode().then(async (syncGlobalStrictMode) => {
+getSyncValue(GLOBAL_STRICT_MODE).then(async (syncGlobalStrictMode) => {
     console.log("globalStrictMode: value in sync storage is set to", syncGlobalStrictMode);
     let globalStrictMode = false;
     if (!syncGlobalStrictMode) {
         console.log("globalStrictMode: thus setting globalStrictMode to", globalStrictMode);
-        await setGlobalStrictMode(globalStrictMode);
+        await saveSyncValue(GLOBAL_STRICT_MODE, globalStrictMode);
     } else {
         globalStrictMode = syncGlobalStrictMode;
     }
@@ -24,7 +24,7 @@ getGlobalStrictMode().then(async (syncGlobalStrictMode) => {
 })
 
 // Do icon setup etc at startup
-getExtensionRunning().then(async extensionRunning => {
+getSyncValue(EXTENSION_RUNNING).then(async extensionRunning => {
     await updateRunningIcon(extensionRunning);
 });
 
