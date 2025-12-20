@@ -6,10 +6,6 @@ const spinnerElement = document.getElementById("spinner");
 const statusElement = document.getElementById('status');
 const originalUrlElement = document.getElementById('original-url');
 
-function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function init() {
     statusElement.textContent = 'Determining the original page you tried to open...';
 
@@ -23,9 +19,6 @@ async function init() {
     }
     originalUrlElement.textContent = originalUrl;
     statusElement.textContent = 'Checking SCION compatibility for:';
-
-    // TODO: remove this after testing (fake delay to verify checking.html page is working) and its related 'sleep' helper function
-    await sleep(2000);
 
     // extracting the hostname from the URL
     let host;
