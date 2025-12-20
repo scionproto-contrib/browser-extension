@@ -220,7 +220,6 @@ function onHeadersReceived(details) {
 
         async function asyncHelper() {
             const initiatorUrl = safeInitiatorHostname(details.initiator);
-            // const initiatorUrl = details.initiator ? new URL(details.initiator) : null;
             await handleAddDnrRule(targetUrl.hostname, scionEnabled, false);
             await createDBEntry(targetUrl.hostname, initiatorUrl?.hostname || "", details.tabId, scionEnabled);
         }
