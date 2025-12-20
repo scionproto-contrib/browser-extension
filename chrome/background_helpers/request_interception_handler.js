@@ -38,7 +38,7 @@ export async function isHostScion(hostname, initiator, currentTabId, alreadyHasL
         else console.log("[DB]: scion disabled (after resolve): ", hostname);
 
         await handleAddDnrRule(hostname, scionEnabled, alreadyHasLock);
-        await createDBEntry(hostname, initiator, currentTabId, scionEnabled);
+        await createRequestEntry(hostname, initiator, currentTabId, scionEnabled);
     } else {
         console.warn("[DB]: Resolution error: ", response.status);
     }
@@ -131,6 +131,10 @@ function onBeforeRequest(details) {
             // from testing, mainframe requests usually did not contain a documentId, onCommitted mainframe requests
             // however do, so we handle setting the new documentId in the onCommitted method as it is generally invoked
             // before onBeforeRequest anyway
+
+            // additionally, mainframe requests also do not contain an initiator, thus we can return here already
+            console.log(`[onBeforeRequest]: Got main_frame request for ${hostname}, resetting tab state.`, details);
+            return;
         }
 
         // ignore requests if the documentId does not match the one observed in onCommitted
@@ -219,9 +223,10 @@ function onHeadersReceived(details) {
         });
 
         async function asyncHelper() {
-            const initiatorUrl = safeInitiatorHostname(details.initiator);
+            const initiatorHostname = safeInitiatorHostname(details.initiator);
+            if (initiatorHostname === null) console.log("[onHeadersReceived]: Failed to extract hostname from initiator: ", details);
             await handleAddDnrRule(targetUrl.hostname, scionEnabled, false);
-            await createDBEntry(targetUrl.hostname, initiatorUrl?.hostname || "", details.tabId, scionEnabled);
+            await createRequestEntry(targetUrl.hostname, initiatorHostname ?? "", details.tabId, scionEnabled);
         }
     }
 }
@@ -253,9 +258,9 @@ function onErrorOccurred(details) {
 }
 
 /**
- * Creates a DB entry for the provided `host` and returns the generated `dnrRuleId`.
+ * Creates an entry in the requests list for the provided `hostname` and updates the tab resources with the `hostname`.
  */
-async function createDBEntry(hostname, initiator, currentTabId, scionEnabled) {
+async function createRequestEntry(hostname, initiator, currentTabId, scionEnabled) {
     const requestDBEntry = {
         domain: hostname,
         mainDomain: initiator,
