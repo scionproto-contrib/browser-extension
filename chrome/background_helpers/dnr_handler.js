@@ -1,5 +1,4 @@
-import {getStorageValue, saveStorageValue} from "../shared/storage.js";
-import {getRequestsDatabaseAdapter} from "../database.js";
+import {getRequests, getSyncValue, GLOBAL_STRICT_MODE, PER_SITE_STRICT_MODE} from "../shared/storage.js";
 import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD_URL} from "./proxy_handler.js";
 import {isHostScion} from "./request_interception_handler.js";
 
@@ -16,6 +15,13 @@ General DNR (DeclarativeNetRequest) strategy:
     hypothetical lookup loop example that assumes `example.com` is SCION-capable: user enters
     `example.com`, redirected to the proxy => proxy redirects to `example.com` => again redirected
     to the proxy etc.)
+
+Regarding safety of functions:
+The distribution of DNR rule IDs relies on first fetching the currently active rules, then
+searching for an unused ID and using that in a call to `chrome.declarativeNetRequest.updateDynamicRules()`.
+However, due to these calls being within an async function, there can be data races between
+the fetch of active rules and the addition of a rule with the discovered unused ID, thus these
+actions must be wrapped with `withLock`.
  */
 
 // custom DNR rules (the ID simultaneously represents its priority)
@@ -25,8 +31,6 @@ const SUBRESOURCES_REDIRECT_RULE_ID = 3;
 
 // sufficiently high to have space for custom DNR rules (specified above)
 const BLOCK_RULE_START_ID = 10000;
-const NextDnrRuleId = "nextDnrRuleId"
-const PerSiteStrictMode = "perSiteStrictMode";
 
 const EXT_PAGE = chrome.runtime.getURL('/checking.html');
 const ALL_RESOURCE_TYPES = ["main_frame", "sub_frame", "xmlhttprequest", "script", "image", "font", "media", "stylesheet", "object", "other", "ping", "websocket", "webtransport"];
@@ -41,12 +45,6 @@ const SUBRESOURCE_TYPES = ["sub_frame", "xmlhttprequest", "script", "image", "fo
 export async function initializeDnr(globalStrictMode) {
     console.log("Initializing DNR");
 
-    // initialize NextDnrRuleId in sync storage (if not initialized already)
-    const nextDnrRuleId = await getStorageValue(NextDnrRuleId);
-    if (!nextDnrRuleId) {
-        await saveStorageValue(NextDnrRuleId, BLOCK_RULE_START_ID);
-    }
-
     await setGlobalStrictMode(globalStrictMode);
 }
 
@@ -55,39 +53,31 @@ export async function initializeDnr(globalStrictMode) {
  * installing DNR rules.
  */
 export async function setGlobalStrictMode(globalStrictMode) {
-    // TODO: possibly improve this function by considering already existing rules and reusing them
-    await removeAllDnrBlockRules();
     if (globalStrictMode) {
-        const databaseAdapter = await getRequestsDatabaseAdapter();
-        const requests = await databaseAdapter.get();
+        await withLock(async () => {
+            await removeAllDnrBlockRules();
+            const [allowedHostsWithId, blockedHostsWithId] = await getAllowedAndBlockedHostsWithId();
 
-        let allowedHostsWithId = [];
-        let blockedHostsWithId = [];
-        for (const request of requests) {
-            const entry = [request.domain, request.dnrRuleId];
-            if (request.scionEnabled) allowedHostsWithId.push(entry);
-            else blockedHostsWithId.push(entry);
-        }
+            let dnrRules = [
+                createMainFrameRedirectRule(MAIN_FRAME_REDIRECT_RULE_ID),
+                createSubResourcesRedirectRule(SUBRESOURCES_REDIRECT_RULE_ID),
+            ];
+            for (const [hostname, dnrRuleId] of Object.entries(allowedHostsWithId)) {
+                dnrRules.push(createAllowRule(hostname, dnrRuleId));
+            }
+            for (const [hostname, dnrRuleId] of Object.entries(blockedHostsWithId)) {
+                dnrRules.push(createBlockRule(hostname, dnrRuleId));
+            }
 
-        let dnrRules = [
-            createMainFrameRedirectRule(MAIN_FRAME_REDIRECT_RULE_ID),
-            createSubResourcesRedirectRule(SUBRESOURCES_REDIRECT_RULE_ID),
-        ];
-        for (const hostWithId of allowedHostsWithId) {
-            dnrRules.push(createAllowRule(hostWithId[0], hostWithId[1]));
-        }
-        for (const hostWithId of blockedHostsWithId) {
-            dnrRules.push(createBlockRule(hostWithId[0], hostWithId[1]));
-        }
-
-        await chrome.declarativeNetRequest.updateDynamicRules({
-            addRules: dnrRules,
-            removeRuleIds: []
+            await chrome.declarativeNetRequest.updateDynamicRules({
+                addRules: dnrRules,
+                removeRuleIds: []
+            });
         });
     } else {
         // only handle perSiteStrictMode if global mode is off, otherwise global overrides them anyway
         // fallback to empty dictionary if no value was present in storage
-        const perSiteStrictMode = await getStorageValue(PerSiteStrictMode) || {};
+        const perSiteStrictMode = await getSyncValue(PER_SITE_STRICT_MODE) || {};
         await setPerSiteStrictMode(perSiteStrictMode);
     }
 }
@@ -96,63 +86,57 @@ export async function setGlobalStrictMode(globalStrictMode) {
  * Updates the DNR rules to handle individual strict sites (which are based on the `perSiteStrictMode` parameter).
  */
 export async function setPerSiteStrictMode(perSiteStrictMode) {
-    // TODO: possibly improve this function by considering already existing rules and reusing them
     // if globalStrictMode is on, do not change any DNR rules
-    const globalStrictMode = await getStorageValue("globalStrictMode");
+    const globalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);
     if (globalStrictMode) return;
 
-    const databaseAdapter = await getRequestsDatabaseAdapter();
-    const requests = await databaseAdapter.get();
-    let allowedHostsWithId = {};
-    let blockedHostsWithId = {};
-    for (const request of requests) {
-        if (request.scionEnabled) allowedHostsWithId[request.domain] = request.dnrRuleId;
-        else blockedHostsWithId[request.domain] = request.dnrRuleId;
-    }
+    await withLock(async () => {
+        const [allowedHostsWithId, blockedHostsWithId] = await getAllowedAndBlockedHostsWithId();
 
-    await removeAllDnrBlockRules();
-    const strictHosts = Object.entries(perSiteStrictMode)
-        .filter(([, isStrict]) => isStrict)
-        .map(([host]) => host);
+        await removeAllDnrBlockRules();
+        const strictHosts = Object.entries(perSiteStrictMode)
+            .filter(([, isStrict]) => isStrict)
+            .map(([host]) => host);
 
-    // adding rules that block each of the hosts directly
-    let rules = [];
-    for (const strictHost of strictHosts) {
-        // if the extension has info about the host, add the appropriate DNR rule, otherwise perform a lookup
-        if (Object.keys(blockedHostsWithId).includes(strictHost)) rules.push(createBlockRule(strictHost, blockedHostsWithId[strictHost]));
-        else if (Object.keys(allowedHostsWithId).includes(strictHost)) rules.push(createAllowRule(strictHost, allowedHostsWithId[strictHost]));
-        else {
-            // using 0 as the tab id, as no tab can be associated with this request
-            // isHostScion already adds the appropriate DNR rules based on the lookup result (including creating the DB entry for the host)
-            await isHostScion(strictHost, "", 0);
+        // adding rules that block each of the hosts directly
+        let rules = [];
+        for (const strictHost of strictHosts) {
+            // if the extension has info about the host, add the appropriate DNR rule, otherwise perform a lookup
+            if (Object.keys(blockedHostsWithId).includes(strictHost)) rules.push(createBlockRule(strictHost, blockedHostsWithId[strictHost]));
+            else if (Object.keys(allowedHostsWithId).includes(strictHost)) rules.push(createAllowRule(strictHost, allowedHostsWithId[strictHost]));
+            else {
+                // using chrome.tabs.TAB_ID_NONE as the tab id, as no tab can be associated with this request
+                // isHostScion already adds the appropriate DNR rules based on the lookup result (including creating the DB entry for the host)
+                await isHostScion(strictHost, strictHost, chrome.tabs.TAB_ID_NONE, true);
+            }
         }
-    }
 
-    // the individual rules above are insufficient, as a site marked as 'strict' can invoke other sub-resources that
-    // should be blocked, but might have a different hostname and thus might not have a matching rule
-    // thus, a redirect rule is needed that redirects all requests whose initiator is marked as 'strict'
-    const subresourceInitiatorRule = createSubResourcesInitiatorRedirectRule(SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID, strictHosts);
-    rules.push(subresourceInitiatorRule);
+        // the individual rules above are insufficient, as a site marked as 'strict' can invoke other sub-resources that
+        // should be blocked, but might have a different hostname and thus might not have a matching rule
+        // thus, a redirect rule is needed that redirects all requests whose initiator is marked as 'strict'
+        if (strictHosts.length > 0) {
+            const subresourceInitiatorRule = createSubResourcesInitiatorRedirectRule(SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID, strictHosts);
+            rules.push(subresourceInitiatorRule);
+        }
 
-    await chrome.declarativeNetRequest.updateDynamicRules({addRules: rules, removeRuleIds: []});
+        await chrome.declarativeNetRequest.updateDynamicRules({addRules: rules, removeRuleIds: []});
+    });
 }
 
 /**
- * Creates a DNR blocking rule with the given `id` for the specified `host` and immediately enables this rule.
- *
- * Thus, only call this function, if the rule should also be applied immediately.
- *
- * @param host to be added as a non-scion page.
- * @param id the id of the rule created and applied by this function.
+ * Based on `scionEnabled` creates a DNR allow or block rule for the `host`.
  */
-export async function addDnrBlockingRule(host, id) {
-    const rule = createBlockRule(host, id)
-    await chrome.declarativeNetRequest.updateDynamicRules({addRules: [rule], removeRuleIds: []})
-}
-
-export async function addDnrAllowRule(host, id) {
-    const rule = createAllowRule(host, id)
-    await chrome.declarativeNetRequest.updateDynamicRules({addRules: [rule], removeRuleIds: []})
+export async function addDnrRule(host, scionEnabled, alreadyHasLock) {
+    const run = async () => {
+        const id = (await getNFreeIds(1))[0];
+        const rule = scionEnabled ? createAllowRule(host, id) : createBlockRule(host, id);
+        await chrome.declarativeNetRequest.updateDynamicRules({addRules: [rule], removeRuleIds: []})
+    };
+    if (alreadyHasLock) {
+        await run();
+        return;
+    }
+    await withLock(run);
 }
 
 /**
@@ -271,24 +255,42 @@ function createSubResourcesInitiatorRedirectRule(id, blockedInitiators) {
 }
 
 /**
- * Fetches (and returns it) the current value of `NextDnrRuleId` in sync storage and increases that value in storage by 1.
+ * Returns a tuple containing two maps, the first containing a mapping from scion-hostnames to their id,
+ * the second containing a mapping from non-scion-hostnames to their id.
+ *
+ * Note that this function is unsafe and must be wrapped with `withLock`.
  */
-export async function fetchNextDnrRuleId() {
-    return withLock(async () => {
-        const nextDnrRuleId = await getStorageValue(NextDnrRuleId)
-        if (!nextDnrRuleId) {
-            console.error("An error occurred during fetchNextDnrRuleId - There was no value stored, the default 'undefined' was returned.");
-            return -100;
-        }
+async function getAllowedAndBlockedHostsWithId() {
+    const requests = await getRequests();
+    let allowedHostsWithId = {};
+    let blockedHostsWithId = {};
+    const freeIds = await getNFreeIds(requests.length);
 
-        // increasing the value in storage by 1
-        await saveStorageValue(NextDnrRuleId, nextDnrRuleId + 1);
+    let i = 0;
+    for (const request of requests) {
+        if (request.scionEnabled) allowedHostsWithId[request.domain] = freeIds[i];
+        else blockedHostsWithId[request.domain] = freeIds[i];
+        i++;
+    }
 
-        return nextDnrRuleId;
-    })
+    return [allowedHostsWithId, blockedHostsWithId];
 }
 
-// lock to prevent interleavings when generating block rule IDs since access to sync storage is async
+/**
+ * Returns `n` different IDs that are currently not in use by any DNR rule.
+ *
+ * Note that this function is unsafe and must be wrapped with `withLock`.
+ */
+async function getNFreeIds(n) {
+    const currentRules = await chrome.declarativeNetRequest.getDynamicRules();
+    const usedIds = new Set(currentRules.map(rule => rule.id));
+    const idList = new Set(Array.from({length: n + usedIds.size}, (_, i) => i + BLOCK_RULE_START_ID));
+    return Array.from(idList.difference(usedIds));
+}
+
+/**
+ * Lock to prevent data races when generating DNR rule IDs since access to `chrome.storage` is async.
+ */
 let idLock = Promise.resolve();
 
 function withLock(fn) {

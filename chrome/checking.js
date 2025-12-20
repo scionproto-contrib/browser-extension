@@ -1,4 +1,5 @@
 import {isHostScion} from "./background_helpers/request_interception_handler.js";
+import {clearTabResources} from "./shared/storage.js";
 
 const titleElement = document.getElementById("title");
 const spinnerElement = document.getElementById("spinner");
@@ -38,7 +39,9 @@ async function init() {
     }
 
     const currentTab = await chrome.tabs.getCurrent();
-    // supplying an empty initiator, as the hosts checked by checking.js are of type main_frame, thus not sub-resources and thus not requested by some other host
+    // since a main_frame request switches the entire page to checking.html, it should be safe to assume the list of resources
+    // requested by this tab can be overwritten
+    await clearTabResources(currentTab.id);
     const isScion = await isHostScion(host, host, currentTab.id);
     if (!isScion) {
         statusElement.textContent = "This page is NOT SCION-capable and was blocked in strict mode.";
