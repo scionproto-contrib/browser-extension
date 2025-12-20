@@ -3,12 +3,10 @@
 
 
 import {getSyncValue, getTabResources, PER_SITE_STRICT_MODE, saveSyncValue} from "./shared/storage.js";
+import {DEFAULT_PROXY_HOST, HTTPS_PROXY_SCHEME, HTTPS_PROXY_PORT, proxyPathUsagePath, proxyHealthCheckPath} from "./background_helpers/proxy_handler.js";
 
-const DEFAULT_PROXY_SCHEME = "https"
-const DEFAULT_PROXY_HOST = "forward-proxy.scion.ethz.ch";
-const DEFAULT_PROXY_PORT = "9443";
-const proxyPathUsagePath = "/path-usage"
-const proxyHealthCheckPath = "/health"
+const DEFAULT_PROXY_SCHEME = HTTPS_PROXY_SCHEME;
+const DEFAULT_PROXY_PORT = HTTPS_PROXY_PORT;
 
 const toggleRunning = document.getElementById('toggleRunning');
 const checkboxRunning = document.getElementById('checkboxRunning');

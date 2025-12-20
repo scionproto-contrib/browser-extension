@@ -1,10 +1,12 @@
-const HTTPS_PROXY_SCHEME = "https"
 const HTTP_PROXY_SCHEME = "http"
-const DEFAULT_PROXY_HOST = "forward-proxy.scion.ethz.ch";
-const HTTPS_PROXY_PORT = "9443";
 const HTTP_PROXY_PORT = "9080";
+export const HTTPS_PROXY_SCHEME = "https"
+export const HTTPS_PROXY_PORT = "9443";
+export const DEFAULT_PROXY_HOST = "forward-proxy.scion";
 
 export const proxyHealthCheckPath = "/health"
+export const proxyPathUsagePath = "/path-usage"
+
 export const proxyHostResolvePath = "/resolve"
 export const proxyHostResolveParam = "host"
 export const proxyURLResolvePath = "/redirect"
