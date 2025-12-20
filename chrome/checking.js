@@ -1,5 +1,6 @@
 import {isHostScion} from "./background_helpers/request_interception_handler.js";
 import {clearTabResources} from "./shared/storage.js";
+import {safeHostname} from "./shared/utilities.js";
 
 const titleElement = document.getElementById("title");
 const spinnerElement = document.getElementById("spinner");
@@ -21,11 +22,9 @@ async function init() {
     statusElement.textContent = 'Checking SCION compatibility for:';
 
     // extracting the hostname from the URL
-    let host;
-    try {
-        host = new URL(originalUrl).hostname;
-    } catch (e) {
-        console.error('Invalid URL:', e);
+    const host = safeHostname(originalUrl);
+    if (host === null) {
+        console.error('Invalid URL:', originalUrl);
         statusElement.textContent = 'Invalid original URL.';
         checkFinished()
         return;
@@ -34,6 +33,8 @@ async function init() {
     const currentTab = await chrome.tabs.getCurrent();
     // since a main_frame request switches the entire page to checking.html, it should be safe to assume the list of resources
     // requested by this tab can be overwritten
+    // clearing the resources must be done here, as onBeforeRequest only handles it in non-globalStrictMode, this is in order
+    // not to clear tab resources added via the isHostScion call below
     await clearTabResources(currentTab.id);
     const isScion = await isHostScion(host, host, currentTab.id);
     if (!isScion) {

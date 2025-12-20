@@ -1,4 +1,5 @@
 import {clearAllTabResources, clearTabResources, getTabResources} from "../shared/storage.js";
+import {safeHostname} from "../shared/utilities.js";
 
 export function initializeTabListeners() {
     // User switches between tabs
@@ -47,12 +48,13 @@ export function initializeTabListeners() {
 // Displays a green/blue SCION icon depending on the current url is
 // being forwarded via SCION
 export async function handleTabChange(tab) {
-    if (tab.active && tab.url) {
-        const url = new URL(tab.url);
+    if (!tab.active) return;
+    if (tab.url) {
+        const hostname = safeHostname(tab.url);
 
         let mixedContent;
         const resources = await getTabResources(tab.id) ?? [];
-        const mainDomainSCIONEnabled = resources.find(resource => resource[0] === url.hostname && resource[1]);
+        const mainDomainSCIONEnabled = resources.find(resource => resource[0] === hostname && resource[1]);
         for (const resource of resources) {
             if (!resource[1]) {
                 mixedContent = true;
@@ -69,5 +71,28 @@ export async function handleTabChange(tab) {
         } else {
             await chrome.action.setIcon({path: "/images/scion-38_not_available.jpg"});
         }
+
+        return;
     }
+
+    // in case the tab object does not contain a URL, do a best-effort fallback by just setting the domain to 'not-available' if all resources are non-scion
+    let allScion = true;
+    let allNonScion = true;
+    const resources = await getTabResources(tab.id) ?? [];
+    for (const resource of resources) {
+        const scionEnabled = resource[1];
+
+        if (!scionEnabled) {
+            allScion = false;
+        } else {
+            allNonScion = false;
+        }
+    }
+
+    if (allNonScion)
+        await chrome.action.setIcon({path: "/images/scion-38_not_available.jpg"});
+    else if (allScion)
+        await chrome.action.setIcon({path: "/images/scion-38_enabled.jpg"});
+    else
+        await chrome.action.setIcon({path: "/images/scion-38_mixed.jpg"});
 }

@@ -2,6 +2,7 @@ import {proxyAddress, proxyHostResolveParam, proxyHostResolvePath, proxyURLResol
 import {addDnrRule} from "./dnr_handler.js";
 import {policyCookie} from "./geofence_handler.js";
 import {addRequest, addTabResource, clearTabResources, getRequests, getSyncValue, GLOBAL_STRICT_MODE, PER_SITE_STRICT_MODE} from "../shared/storage.js";
+import {normalizedHostname, safeHostname} from "../shared/utilities.js";
 
 /**
  * General request interception concept:
@@ -66,14 +67,15 @@ function withTabLock(tabId, fn) {
 // map that maps the tabId to a state (of type: { gen, topOrigin, currentDocumentId }
 const tabState = new Map();
 
-function safeHostname(url) {
+function safeProtocolFilteredHostname(url) {
     try {
         const u = new URL(url);
         // ignore internal or otherwise undesired requests
         if (u.protocol === "chrome-extension:" || u.protocol === "chrome:" || u.protocol === "about:" || u.protocol === "data:" || u.protocol === "blob:") {
             return null;
         }
-        return u.hostname || null;
+        if (u.hostname) return normalizedHostname(u.hostname);
+        return null;
     } catch {
         return null;
     }
@@ -82,14 +84,6 @@ function safeHostname(url) {
 function safeOrigin(url) {
     try {
         return new URL(url).origin;
-    } catch {
-        return null;
-    }
-}
-
-function safeInitiatorHostname(initiator) {
-    try {
-        return initiator ? new URL(initiator).hostname : null;
     } catch {
         return null;
     }
@@ -115,7 +109,7 @@ function onBeforeRequest(details) {
     const tabId = details.tabId;
     if (tabId === chrome.tabs.TAB_ID_NONE || tabId < 0) return;
 
-    const hostname = safeHostname(details.url);
+    const hostname = safeProtocolFilteredHostname(details.url);
     if (!hostname) return;
 
     withTabLock(tabId, async () => {
@@ -123,17 +117,19 @@ function onBeforeRequest(details) {
 
         // if a mainframe is detected, immediately reset the tab resources (since a new page was opened in an existing tab,
         // thus previous information should be removed)
+        const globalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);
         if (details.type === "main_frame") {
             state = {gen: state.gen + 1, topOrigin: safeOrigin(details.url), currentDocId: null};
             tabState.set(tabId, state);
-            await clearTabResources(tabId);
+            // if global strict mode is on, clearing resources is handled by checking.html
+            if (!globalStrictMode) await clearTabResources(tabId);
 
             // from testing, mainframe requests usually did not contain a documentId, onCommitted mainframe requests
             // however do, so we handle setting the new documentId in the onCommitted method as it is generally invoked
             // before onBeforeRequest anyway
 
             // additionally, mainframe requests also do not contain an initiator, thus we can return here already
-            console.log(`[onBeforeRequest]: Got main_frame request for ${hostname}, resetting tab state.`, details);
+            console.log(`[onBeforeRequest]: Got main_frame request for ${hostname}, resetting tab state: ${!globalStrictMode}.`, details);
             return;
         }
 
@@ -158,17 +154,15 @@ function onBeforeRequest(details) {
         }
 
         // ===== CREATE TAB RESOURCES ENTRY =====
-        const globalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);
         const perSiteStrictMode = (await getSyncValue(PER_SITE_STRICT_MODE)) || {};
 
         const requests = await getRequests();
         const hostnameScionEnabled = requests.find((request) => request.domain === hostname)?.scionEnabled;
 
-        const initiatorHostname = safeInitiatorHostname(details.initiator);
-        // for mainframe, check the hostname, for subresources check the initiator whether it is set to strict
-        const strictKey = details.type === "main_frame" ? hostname : initiatorHostname;
+        const initiatorHostname = safeHostname(details.initiator);
 
-        if (globalStrictMode || (strictKey && perSiteStrictMode[strictKey])) {
+        // mainframe requests are already handled above and cannot reach this code, thus it is safe to assume that initiatorHostname exists
+        if (globalStrictMode || perSiteStrictMode[initiatorHostname]) {
             // if it has not been discovered previously, ignore it since the DNR redirect rule will catch it
             // in strict mode and then perform the lookup (or in case of perSiteStrictMode, the lookup is already
             // performed if the user enters an unknown url there)
@@ -204,29 +198,29 @@ function onHeadersReceived(details) {
         const url = new URL(details.url);
         // the actual URL that we need is in ?url=$url
         const target = url.search.split("=")[1];
-        const targetUrl = new URL(target);
+        const targetHostname = normalizedHostname(new URL(target).hostname);
 
         // the proxy is expected to return a 503 if the host is not SCION-capable and 301 (redirect) otherwise
         if (details.statusCode < 500 && details.statusCode !== 301) {
-            console.error(`[onHeadersReceived]: Got an unexpected result from the proxy for host ${targetUrl.hostname}: `, details);
+            console.error(`[onHeadersReceived]: Got an unexpected result from the proxy for host ${targetHostname}: `, details);
             return;
         }
 
         let scionEnabled = details.statusCode === 301;
 
         // logging
-        if (scionEnabled) console.log("[onHeadersReceived]: scion enabled (after resolve): ", targetUrl.hostname);
-        else console.log("[onHeadersReceived]: scion disabled (after resolve): ", targetUrl.hostname);
+        if (scionEnabled) console.log("[onHeadersReceived]: scion enabled (after resolve): ", targetHostname);
+        else console.log("[onHeadersReceived]: scion disabled (after resolve): ", targetHostname);
 
         asyncHelper().catch(reason => {
             console.error("[onHeadersReceived]: An error occurred during the creation of the DB entry or DNR rule: ", reason);
         });
 
         async function asyncHelper() {
-            const initiatorHostname = safeInitiatorHostname(details.initiator);
+            const initiatorHostname = safeHostname(details.initiator);
             if (initiatorHostname === null) console.log("[onHeadersReceived]: Failed to extract hostname from initiator: ", details);
-            await handleAddDnrRule(targetUrl.hostname, scionEnabled, false);
-            await createRequestEntry(targetUrl.hostname, initiatorHostname ?? "", details.tabId, scionEnabled);
+            await handleAddDnrRule(targetHostname, scionEnabled, false);
+            await createRequestEntry(targetHostname, initiatorHostname ?? "", details.tabId, scionEnabled);
         }
     }
 }

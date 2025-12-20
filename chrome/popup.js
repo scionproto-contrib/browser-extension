@@ -4,6 +4,7 @@
 
 import {getSyncValue, getTabResources, PER_SITE_STRICT_MODE, saveSyncValue} from "./shared/storage.js";
 import {DEFAULT_PROXY_HOST, HTTPS_PROXY_SCHEME, HTTPS_PROXY_PORT, proxyPathUsagePath, proxyHealthCheckPath} from "./background_helpers/proxy_handler.js";
+import {safeHostname} from "./shared/utilities.js";
 
 const DEFAULT_PROXY_SCHEME = HTTPS_PROXY_SCHEME;
 const DEFAULT_PROXY_PORT = HTTPS_PROXY_PORT;
@@ -649,20 +650,20 @@ async function loadRequestInfo() {
     const tabs = await chrome.tabs.query({active: true, currentWindow: true});
     const activeTab = tabs[0];
     const activeTabId = activeTab.id;
-    const url = new URL(activeTab.url);
-    popupMainDomain = url.hostname;
+    const hostname = safeHostname(activeTab.url);
+    popupMainDomain = hostname;
 
     const resources = await getTabResources(activeTabId) ?? [];
-    const mainDomainSCIONEnabled = resources.find(resource => resource[0] === url.hostname && resource[1]);
+    const mainDomainSCIONEnabled = resources.find(resource => resource[0] === hostname && resource[1]);
 
-    if (perSiteStrictMode[url.hostname]) {
-        mainDomain.innerHTML = "SCION preference for " + url.hostname;
+    if (perSiteStrictMode[hostname]) {
+        mainDomain.innerHTML = "SCION preference for " + hostname;
         toggleRunning.checked = true; // true
         toggleRunning.classList.remove("halfchecked");
         lineRunning.style.backgroundColor = "#48bb78";
         scionmode.innerHTML = "Strict";
     } else if (mainDomainSCIONEnabled) {
-        mainDomain.innerHTML = "SCION preference for " + url.hostname;
+        mainDomain.innerHTML = "SCION preference for " + hostname;
         toggleRunning.checked = false; // true
         toggleRunning.classList.add("halfchecked");
         lineRunning.style.backgroundColor = "#cccccc";
