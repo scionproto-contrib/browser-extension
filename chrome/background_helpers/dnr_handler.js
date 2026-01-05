@@ -33,6 +33,11 @@ const SUBRESOURCES_REDIRECT_RULE_ID = 3;
 const BLOCK_RULE_START_ID = 10000;
 
 const EXT_PAGE = chrome.runtime.getURL('/checking.html');
+
+// extracting the hostname from the WPAD URL, as it needs to be excluded from matching rules
+// note that this might cause other resources that share the same hostname to be excluded too
+const WPAD_HOSTNAME = new URL(WPAD_URL).hostname;
+
 const ALL_RESOURCE_TYPES = ["main_frame", "sub_frame", "xmlhttprequest", "script", "image", "font", "media", "stylesheet", "object", "other", "ping", "websocket", "webtransport"];
 const MAIN_FRAME_TYPE = ["main_frame"];
 const SUBRESOURCE_TYPES = ["sub_frame", "xmlhttprequest", "script", "image", "font", "media", "stylesheet", "object", "other", "ping", "websocket", "webtransport"];
@@ -221,7 +226,7 @@ function createSubResourcesRedirectRule(id) {
             // exclude requests from the proxy to prevent lookup-loops
             excludedRequestDomains: [
                 proxyHost,
-                WPAD_URL,
+                WPAD_HOSTNAME,
             ],
         },
     };
@@ -248,7 +253,7 @@ function createSubResourcesInitiatorRedirectRule(id, blockedInitiators) {
             // exclude requests from the proxy to prevent lookup-loops
             excludedRequestDomains: [
                 proxyHost,
-                WPAD_URL,
+                WPAD_HOSTNAME,
             ],
         }
     }
