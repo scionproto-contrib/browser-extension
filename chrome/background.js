@@ -19,6 +19,10 @@ getSyncValue(GLOBAL_STRICT_MODE).then(async (syncGlobalStrictMode) => {
     } else {
         globalStrictMode = syncGlobalStrictMode;
     }
+    /*--- PAC --------------------------------------------------------------------*/
+    // initializing proxy handler before DNR, as some DNR rules rely on the `proxyAddress`
+    await initializeProxyHandler()
+    /*--- END PAC ----------------------------------------------------------------*/
 
     await initializeDnr(globalStrictMode);
 })
@@ -27,11 +31,6 @@ getSyncValue(GLOBAL_STRICT_MODE).then(async (syncGlobalStrictMode) => {
 getSyncValue(EXTENSION_RUNNING).then(async extensionRunning => {
     await updateRunningIcon(extensionRunning);
 });
-
-
-/*--- PAC --------------------------------------------------------------------*/
-initializeProxyHandler()
-/*--- END PAC ----------------------------------------------------------------*/
 
 /*--- storage ----------------------------------------------------------------*/
 

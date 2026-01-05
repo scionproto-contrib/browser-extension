@@ -1,6 +1,7 @@
 import {isHostScion} from "./background_helpers/request_interception_handler.js";
 import {clearTabResources} from "./shared/storage.js";
 import {safeHostname} from "./shared/utilities.js";
+import {initializeProxyHandler} from "./background_helpers/proxy_handler.js";
 
 const titleElement = document.getElementById("title");
 const spinnerElement = document.getElementById("spinner");
@@ -8,6 +9,8 @@ const statusElement = document.getElementById('status');
 const originalUrlElement = document.getElementById('original-url');
 
 async function init() {
+    await initializeProxyHandler();
+
     statusElement.textContent = 'Determining the original page you tried to open...';
 
     // extracting the original URL from the path (of the form `extension_path/checking.html#https://example.com`)
