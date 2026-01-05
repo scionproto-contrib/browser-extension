@@ -18,15 +18,6 @@ export function initializeTabListeners() {
         await clearTabResources(tabId);
     });
 
-    // when a window is closed, this is equivalent to all tabs
-    chrome.windows.onRemoved.addListener(async function (windowId) {
-        const window = await chrome.windows.get(windowId);
-        const tabs = window.tabs;
-        for (const tab of tabs) {
-            await clearTabResources(tab.id);
-        }
-    });
-
     // when a window is created, and it is the only open window (i.e. browser just launched), clear all knowledge about the tabs
     // this functionality is only needed if the browser crashes and thus, the tabs' and windows' onRemoved event doesn't fire
     chrome.windows.onCreated.addListener(async function (window) {
