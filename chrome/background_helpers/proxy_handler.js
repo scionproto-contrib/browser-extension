@@ -95,7 +95,7 @@ async function fetchAndApplyScionPAC() {
         if (!response.ok) {
             throw new Error(`Retrieving PAC config; status: ${response.status}`);
         }
-        const pacScript = response.text();
+        const pacScript = await response.text();
 
         const proxyConfig = parseProxyFromPAC(pacScript);
 
