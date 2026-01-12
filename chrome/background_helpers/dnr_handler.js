@@ -6,7 +6,10 @@ import {isHostScion} from "./request_interception_handler.js";
 General DNR (DeclarativeNetRequest) strategy:
  - all `main_frame` resources are forwarded to a `checking.html` page where the extension
     can asynchronously verify whether the host is SCION capable. If it is, redirect to that
-    resource, otherwise show a blocking-page
+    resource, otherwise show a blocking-page (cannot use the approach for sub-resources (discussed
+    in the next point) as the browser fails with "ERR_CONNECTION_RESET" and additionally,
+    checking.html allows for superior UI showing the user the current progress since otherwise
+    the resolve-URL is visible in the browser's address bar and thus visible to the user)
  - all other sub-resources are forwarded to the `/redirect` endpoint of the proxy and then
     handled by the `onHeadersReceived` function that, based on the returned statuscode, determines
     whether the host was scion capable (to prevent future requests from going to the proxy again)
