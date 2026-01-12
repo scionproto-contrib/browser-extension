@@ -24,12 +24,12 @@ the fetch of active rules and the addition of a rule with the discovered unused 
 actions must be wrapped with `withLock`.
  */
 
-// custom DNR rules (the ID simultaneously represents its priority)
+// generic DNR rules (the ID simultaneously represents its priority)
 const SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID = 1;
 const MAIN_FRAME_REDIRECT_RULE_ID = 2;
 const SUBRESOURCES_REDIRECT_RULE_ID = 3;
 
-// sufficiently high to have space for custom DNR rules (specified above)
+// sufficiently high to have space for generic DNR rules (specified above)
 const DOMAIN_SPECIFIC_RULES_START_ID = 10000;
 
 const EXT_PAGE = chrome.runtime.getURL('/checking.html');
@@ -62,7 +62,7 @@ export async function setGlobalStrictMode(globalStrictMode) {
         await withLock(async () => {
             const [allowedHostsWithId, blockedHostsWithId] = await getAllowedAndBlockedHostsWithId();
 
-            let customRules = [
+            let genericRules = [
                 createMainFrameRedirectRule(MAIN_FRAME_REDIRECT_RULE_ID),
                 createSubResourcesRedirectRule(SUBRESOURCES_REDIRECT_RULE_ID),
             ];
@@ -75,7 +75,7 @@ export async function setGlobalStrictMode(globalStrictMode) {
                 domainSpecificRules.push(createBlockRule(hostname, dnrRuleId));
             }
 
-            await updateRules(customRules, domainSpecificRules);
+            await updateRules(genericRules, domainSpecificRules);
         });
     } else {
         // only handle perSiteStrictMode if global mode is off, otherwise global overrides them anyway
@@ -116,13 +116,13 @@ export async function setPerSiteStrictMode(perSiteStrictMode) {
         // the individual rules above are insufficient, as a site marked as 'strict' can invoke other sub-resources that
         // should be blocked, but might have a different hostname and thus might not have a matching rule
         // thus, a redirect rule is needed that redirects all requests whose initiator is marked as 'strict'
-        let customRules = [];
+        let genericRules = [];
         if (strictHosts.length > 0) {
             const subresourceInitiatorRule = createSubResourcesInitiatorRedirectRule(SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID, strictHosts);
-            customRules.push(subresourceInitiatorRule);
+            genericRules.push(subresourceInitiatorRule);
         }
 
-        await updateRules(customRules, domainSpecificRules);
+        await updateRules(genericRules, domainSpecificRules);
     });
 }
 
@@ -140,23 +140,6 @@ export async function addDnrRule(host, scionEnabled, alreadyHasLock) {
         return;
     }
     await withLock(run);
-}
-
-/**
- * removes all DNR block rules, functionally equivalent to calling removeDNRBlockRule for each non-scion page
- */
-export async function removeAllDnrBlockRules(customRulesToRemoveIds = null) {
-    let rulesToRemoveIds;
-    if (customRulesToRemoveIds !== null) rulesToRemoveIds = customRulesToRemoveIds;
-    else {
-        // get all currently active rules and assign them to be removed
-        const currentRules = await chrome.declarativeNetRequest.getDynamicRules()
-        rulesToRemoveIds = currentRules.map(rule => rule.id);
-    }
-
-    if (!rulesToRemoveIds || rulesToRemoveIds.length === 0) return;
-
-    await chrome.declarativeNetRequest.updateDynamicRules({addRules: [], removeRuleIds: rulesToRemoveIds});
 }
 
 function createBlockRule(host, id) {
@@ -293,30 +276,30 @@ async function getNFreeIds(n) {
 
 /**
  * Updates the DNR rules with a single call to `chrome.declarativeNetRequest.updateDynamicRules` such that after execution of this function, only
- * `targetCustomRules` and `targetDomainSpecificRules` are active.
+ * `targetGenericRules` and `targetDomainSpecificRules` are active.
  *
- * @param targetCustomRules is an array of custom defined rules (such as `createMainFrameRedirectRule`) that should be active from this point onward.
+ * @param targetGenericRules is an array of generic (custom defined) rules (such as `createMainFrameRedirectRule`) that should be active from this point onward.
  * @param targetDomainSpecificRules is an array of domain specific rules (created by `createBlockRule` and `createAllowRule`) that should be active from this point onward.
  */
-async function updateRules(targetCustomRules, targetDomainSpecificRules) {
+async function updateRules(targetGenericRules, targetDomainSpecificRules) {
     const currentRules = await chrome.declarativeNetRequest.getDynamicRules();
-    let currentCustomRules = [];
+    let currentGenericRules = [];
     let currentDomainSpecificRules = [];
     for (const currentRule of currentRules) {
-        if (currentRule.id < DOMAIN_SPECIFIC_RULES_START_ID) currentCustomRules.push(currentRule);
+        if (currentRule.id < DOMAIN_SPECIFIC_RULES_START_ID) currentGenericRules.push(currentRule);
         else currentDomainSpecificRules.push(currentRule);
     }
 
-    const customRulesToAdd = targetCustomRules.filter(rule => !currentCustomRules.includes(rule));
-    const customRulesToRemove = currentCustomRules.filter(rule => !targetCustomRules.includes(rule));
+    const genericRulesToAdd = targetGenericRules.filter(rule => !currentGenericRules.includes(rule));
+    const genericRulesToRemove = currentGenericRules.filter(rule => !targetGenericRules.includes(rule));
 
     const currentDsrHosts = currentDomainSpecificRules.map(rule => rule.condition.requestDomains[0]);
     const targetDsrHosts = targetDomainSpecificRules.map(rule => rule.condition.requestDomains[0]);
     const domainSpecificRulesToAdd = targetDomainSpecificRules.filter(rule => !currentDsrHosts.includes(rule.condition.requestDomains[0]));
     const domainSpecificRulesToRemove = currentDomainSpecificRules.filter(rule => !targetDsrHosts.includes(rule.condition.requestDomains[0]));
 
-    const rulesToAdd = customRulesToAdd.concat(domainSpecificRulesToAdd);
-    const rulesToRemoveIds = customRulesToRemove.concat(domainSpecificRulesToRemove).map(rule => rule.id);
+    const rulesToAdd = genericRulesToAdd.concat(domainSpecificRulesToAdd);
+    const rulesToRemoveIds = genericRulesToRemove.concat(domainSpecificRulesToRemove).map(rule => rule.id);
     await chrome.declarativeNetRequest.updateDynamicRules({addRules: rulesToAdd, removeRuleIds: rulesToRemoveIds});
 }
 
