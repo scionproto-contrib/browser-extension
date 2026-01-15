@@ -66,8 +66,8 @@ export async function setGlobalStrictMode(globalStrictMode) {
             const [allowedHostsWithId, blockedHostsWithId] = await getAllowedAndBlockedHostsWithId();
 
             let genericRules = [
-                createMainFrameRedirectRule(MAIN_FRAME_REDIRECT_RULE_ID),
-                createSubResourcesRedirectRule(SUBRESOURCES_REDIRECT_RULE_ID),
+                createMainFrameRedirectRule(),
+                createSubResourcesRedirectRule(),
             ];
 
             let domainSpecificRules = [];
@@ -121,12 +121,52 @@ export async function setPerSiteStrictMode(perSiteStrictMode) {
         // thus, a redirect rule is needed that redirects all requests whose initiator is marked as 'strict'
         let genericRules = [];
         if (strictHosts.length > 0) {
-            const subresourceInitiatorRule = createSubResourcesInitiatorRedirectRule(SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID, strictHosts);
+            const subresourceInitiatorRule = createSubResourcesInitiatorRedirectRule(strictHosts);
             genericRules.push(subresourceInitiatorRule);
         }
 
         await updateRules(genericRules, domainSpecificRules);
     });
+}
+
+/**
+ * When the proxy settings were changed, this function must be executed as some DNR rules rely on
+ * the {@link proxyAddress} and therefore need to be updated.
+ */
+export async function updateProxySettingsInDnrRules() {
+    const currentRules = await chrome.declarativeNetRequest.getDynamicRules();
+    let hasSRR = false; // sub-resources redirect rule
+    let hasSIRR = false; // sub-resources initiator redirect rule
+    let initiatorRuleBlockedInitiators = null;
+    for (const rule of currentRules) {
+        if (rule.id === SUBRESOURCES_REDIRECT_RULE_ID) {
+            hasSRR = true;
+            // both rules found, no need to search further
+            if (hasSIRR) break;
+        }
+        if (rule.id === SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID) {
+            initiatorRuleBlockedInitiators = rule.condition.initiatorDomains;
+            hasSIRR = true;
+
+            // both rules found, no need to search further
+            if (hasSRR) break;
+        }
+    }
+
+    if (!hasSRR && !hasSIRR) return;
+
+    let toAdd = [];
+    let toRemoveIds = [];
+    if (hasSRR) {
+        toAdd.push(createSubResourcesRedirectRule());
+        toRemoveIds.push(SUBRESOURCES_REDIRECT_RULE_ID);
+    }
+    if (hasSIRR) {
+        toAdd.push(createSubResourcesInitiatorRedirectRule(initiatorRuleBlockedInitiators));
+        toRemoveIds.push(SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID);
+    }
+
+    await chrome.declarativeNetRequest.updateDynamicRules({addRules: toAdd, removeRuleIds: toRemoveIds});
 }
 
 /**
@@ -187,10 +227,10 @@ function urlFilterFromHost(host) {
 /**
  * Returns a DNR rule that redirects all `main_frame` requests to the `checking.html` page for a synchronous blocking lookup.
  */
-function createMainFrameRedirectRule(id) {
+function createMainFrameRedirectRule() {
     return {
-        id: id,
-        priority: id,
+        id: MAIN_FRAME_REDIRECT_RULE_ID,
+        priority: MAIN_FRAME_REDIRECT_RULE_ID,
         action: {
             type: 'redirect',
             redirect: {
@@ -208,10 +248,10 @@ function createMainFrameRedirectRule(id) {
 /**
  * Returns a DNR rule that redirects all sub-resources to the proxy `proxyURLResolvePath` endpoint.
  */
-function createSubResourcesRedirectRule(id) {
+function createSubResourcesRedirectRule() {
     return {
-        id: id,
-        priority: id,
+        id: SUBRESOURCES_REDIRECT_RULE_ID,
+        priority: SUBRESOURCES_REDIRECT_RULE_ID,
         action: {
             type: 'redirect',
             redirect: {
@@ -234,10 +274,10 @@ function createSubResourcesRedirectRule(id) {
 /**
  * Returns a DNR rule that redirects all sub-resources whose initiator is in `blockedInitiators` to the `proxyURLResolvePath` endpoint.
  */
-function createSubResourcesInitiatorRedirectRule(id, blockedInitiators) {
+function createSubResourcesInitiatorRedirectRule(blockedInitiators) {
     return {
-        id: id,
-        priority: id,
+        id: SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID,
+        priority: SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID,
         action: {
             type: 'redirect',
             redirect: {

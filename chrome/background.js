@@ -4,7 +4,7 @@
 import {initializeProxyHandler, loadProxySettings} from "./background_helpers/proxy_handler.js";
 import {allowAllgeofence, geofence, resetPolicyCookie} from "./background_helpers/geofence_handler.js";
 import {EXTENSION_RUNNING, getSyncValue, GLOBAL_STRICT_MODE, saveSyncValue} from "./shared/storage.js";
-import {initializeDnr, setGlobalStrictMode, setPerSiteStrictMode} from "./background_helpers/dnr_handler.js";
+import {initializeDnr, setGlobalStrictMode, setPerSiteStrictMode, updateProxySettingsInDnrRules} from "./background_helpers/dnr_handler.js";
 import {initializeRequestInterceptionListeners} from "./background_helpers/request_interception_handler.js";
 import {initializeTabListeners} from "./background_helpers/tab_handler.js";
 
@@ -62,9 +62,11 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
 
         } else if (namespace === 'sync' && (changes.proxyScheme || changes.proxyHost || changes.proxyPort)) {
             // Reload all proxy settings if any changed
-            loadProxySettings();
+            await loadProxySettings();
 
-            resetPolicyCookie()
+            resetPolicyCookie();
+
+            await updateProxySettingsInDnrRules();
         }
     }
 })
