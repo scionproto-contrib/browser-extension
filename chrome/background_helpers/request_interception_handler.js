@@ -67,6 +67,10 @@ function withTabLock(tabId, fn) {
 // map that maps the tabId to a state (of type: { gen, topOrigin, currentDocumentId }
 const tabState = new Map();
 
+/**
+ * Returns the hostname of the provided `url` in punycode format.
+ * Returns null if extraction fails or the `url` refers to an internal or otherwise undesired resource (e.g. starting with `chrome-extension:`).
+ */
 function safeProtocolFilteredHostname(url) {
     try {
         const u = new URL(url);
@@ -89,6 +93,12 @@ function safeOrigin(url) {
     }
 }
 
+/**
+ * Handles detection of `main_frame`s. Contrary to {@link onBeforeRequest}, the `details` parameter of this handler
+ * receives the `documentId` for `main_frame`s with which requests to sub-resources can be associated to a document,
+ * preventing delayed requests from the previous webpage displayed in the same tab to be counted as requests of the
+ * current webpage (which would result in those old requests showing up in the popup).
+ */
 function onCommitted(details) {
     if (details.tabId < 0) return;
 
@@ -105,6 +115,11 @@ function onCommitted(details) {
     });
 }
 
+/**
+ * Handles updating underlying information for the popup to display when:
+ * - strict mode is off
+ * - when strict mode is on and the host of the request is already known to the extension
+ */
 function onBeforeRequest(details) {
     const tabId = details.tabId;
     if (tabId === chrome.tabs.TAB_ID_NONE || tabId < 0) return;
@@ -192,7 +207,9 @@ function onBeforeRequest(details) {
     });
 }
 
-// Skip answers on a resolve request with a status code 500 if the host is not scion capable
+/**
+ * Handles and classifies responses received from requests to the proxy.
+ */
 function onHeadersReceived(details) {
     if (details.url.startsWith(`${proxyAddress}${proxyURLResolvePath}`)) {
         const url = new URL(details.url);
@@ -258,6 +275,8 @@ function onErrorOccurred(details) {
 
 /**
  * Creates an entry in the requests list for the provided `hostname` and updates the tab resources with the `hostname`.
+ *
+ * Note that both `hostname` and `initiator` must already be in punycode format (see {@link normalizedHostname}).
  */
 async function createRequestEntry(hostname, initiator, currentTabId, scionEnabled) {
     const requestDBEntry = {
@@ -287,7 +306,7 @@ async function handleAddDnrRule(hostname, scionEnabled, alreadyHasLock) {
     if (perSiteStrictMode) {
         strictHosts = Object.entries(perSiteStrictMode)
             .filter(([, isScion]) => isScion)
-            .map(([host]) => host);
+            .map(([host]) => normalizedHostname(host));
     }
 
     if (globalStrictMode || strictHosts.includes(hostname)) {

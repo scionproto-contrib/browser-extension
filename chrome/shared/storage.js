@@ -128,6 +128,8 @@ async function loadRequests() {
 /**
  * Returns a list of requests that match the condition provided in the `filter` or all requests
  * if `filter` is left `undefined`.
+ *
+ * Note that hostnames in request-entries are in punycode format.
  */
 export async function getRequests(filter = undefined) {
     let requests = await loadRequests();
@@ -140,6 +142,8 @@ export async function getRequests(filter = undefined) {
 /**
  * Returns the first request that matches the condition provided in the `filter` or the overall
  * first request if `filter` is left `undefined`.
+ *
+ * Note that hostnames in request-entries are in punycode format.
  */
 export async function firstRequest(filter = undefined) {
     const filteredRequests = await getRequests(filter);
@@ -150,6 +154,8 @@ export async function firstRequest(filter = undefined) {
 /**
  * Adds the provided `entry` to the list of requests or updates the first one request that matches
  * the `replaceFilter`.
+ *
+ * Note that the hostnames contained in `entry` must already be in punycode format (see {@link normalizedHostname}).
  */
 export async function addRequest(entry, replaceFilter = undefined) {
     const requests = await loadRequests();

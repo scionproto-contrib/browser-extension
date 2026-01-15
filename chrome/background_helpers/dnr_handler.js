@@ -1,6 +1,7 @@
 import {getRequests, getSyncValue, GLOBAL_STRICT_MODE, PER_SITE_STRICT_MODE} from "../shared/storage.js";
 import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD_URL} from "./proxy_handler.js";
 import {isHostScion} from "./request_interception_handler.js";
+import {normalizedHostname} from "../shared/utilities.js";
 
 /*
 General DNR (DeclarativeNetRequest) strategy:
@@ -100,7 +101,7 @@ export async function setPerSiteStrictMode(perSiteStrictMode) {
 
         const strictHosts = Object.entries(perSiteStrictMode)
             .filter(([, isStrict]) => isStrict)
-            .map(([host]) => host);
+            .map(([host]) => normalizedHostname(host));
 
         // adding rules that block each of the hosts directly
         let domainSpecificRules = [];
@@ -178,7 +179,8 @@ function createAllowRule(host, id) {
  * Returns the string for the `urlFilter` parameter of a DNR rule.
  */
 function urlFilterFromHost(host) {
-    // in the simplified pattern matching syntax used by `urlFilter`, the '|' pipe denotes the start of the url, allowing for EXACT url matching
+    // in the simplified pattern matching syntax used by `urlFilter`, the '|' pipe denotes the start of the url, allowing for EXACT url matching,
+    // something that the `requestDomains` property cannot do (e.g. `requestDomains: ["example.com"]` will also match requests to `a.example.com`)
     return `|http*://${host}/`;
 }
 
