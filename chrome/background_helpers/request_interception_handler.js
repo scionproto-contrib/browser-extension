@@ -74,7 +74,7 @@ function safeProtocolFilteredHostname(url) {
         if (u.protocol === "chrome-extension:" || u.protocol === "chrome:" || u.protocol === "about:" || u.protocol === "data:" || u.protocol === "blob:") {
             return null;
         }
-        if (u.hostname) return normalizedHostname(u.hostname);
+        if (u.hostname) return u.hostname;
         return null;
     } catch {
         return null;
@@ -198,7 +198,12 @@ function onHeadersReceived(details) {
         const url = new URL(details.url);
         // the actual URL that we need is in ?url=$url
         const target = url.search.split("=")[1];
-        const targetHostname = normalizedHostname(new URL(target).hostname);
+        const targetHostname = safeHostname(target);
+
+        if (targetHostname === null) {
+            console.error(`[onHeadersReceived]: Failed to extract hostname from target url: ${target}`);
+            return;
+        }
 
         // the proxy is expected to return a 503 if the host is not SCION-capable and 301 (redirect) otherwise
         if (details.statusCode < 500 && details.statusCode !== 301) {

@@ -12,8 +12,7 @@
     "webRequest",
     "webNavigation",
     "webRequestAuthProvider",
-    "declarativeNetRequest",
-    "declarativeNetRequestFeedback"
+    "declarativeNetRequest"
   ],
   "host_permissions": [
     "http://*/*",

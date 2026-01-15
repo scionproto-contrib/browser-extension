@@ -43,7 +43,6 @@ const WPAD_HOSTNAME = new URL(WPAD_URL).hostname;
 
 const ALL_RESOURCE_TYPES = ["main_frame", "sub_frame", "xmlhttprequest", "script", "image", "font", "media", "stylesheet", "object", "other", "ping", "websocket", "webtransport"];
 const MAIN_FRAME_TYPE = ["main_frame"];
-const SUBRESOURCE_TYPES = ["sub_frame", "xmlhttprequest", "script", "image", "font", "media", "stylesheet", "object", "other", "ping", "websocket", "webtransport"];
 
 /**
  * Initializes the DNR handler.
@@ -135,6 +134,12 @@ export async function setPerSiteStrictMode(perSiteStrictMode) {
 export async function addDnrRule(host, scionEnabled, alreadyHasLock) {
     const run = async () => {
         const id = (await getNFreeIds(1))[0];
+
+        // if a rule for the `host` already exists, do not add another rule
+        const currentRules = await chrome.declarativeNetRequest.getDynamicRules();
+        const currentUrlFilters = currentRules.map(rule => rule.condition.urlFilter);
+        if (currentUrlFilters.includes(urlFilterFromHost(host))) return;
+
         const rule = scionEnabled ? createAllowRule(host, id) : createBlockRule(host, id);
         await chrome.declarativeNetRequest.updateDynamicRules({addRules: [rule], removeRuleIds: []})
     };
@@ -151,7 +156,7 @@ function createBlockRule(host, id) {
         priority: 100,
         action: {type: 'block'},
         condition: {
-            requestDomains: [host],
+            urlFilter: urlFilterFromHost(host),
             resourceTypes: ALL_RESOURCE_TYPES
         }
     };
@@ -163,10 +168,18 @@ function createAllowRule(host, id) {
         priority: 101,
         action: {type: 'allow'},
         condition: {
-            requestDomains: [host],
+            urlFilter: urlFilterFromHost(host),
             resourceTypes: ALL_RESOURCE_TYPES
         }
     }
+}
+
+/**
+ * Returns the string for the `urlFilter` parameter of a DNR rule.
+ */
+function urlFilterFromHost(host) {
+    // in the simplified pattern matching syntax used by `urlFilter`, the '|' pipe denotes the start of the url, allowing for EXACT url matching
+    return `|http*://${host}/`;
 }
 
 /**
@@ -206,7 +219,7 @@ function createSubResourcesRedirectRule(id) {
         },
         condition: {
             regexFilter: '^.+$', // match any URL
-            resourceTypes: SUBRESOURCE_TYPES,
+            excludedResourceTypes: MAIN_FRAME_TYPE,
             // exclude requests from the proxy to prevent lookup-loops
             excludedRequestDomains: [
                 proxyHost,
@@ -232,7 +245,7 @@ function createSubResourcesInitiatorRedirectRule(id, blockedInitiators) {
         },
         condition: {
             regexFilter: '^.+$', // match any URL
-            resourceTypes: SUBRESOURCE_TYPES,
+            excludedResourceTypes: MAIN_FRAME_TYPE,
             initiatorDomains: blockedInitiators,
             // exclude requests from the proxy to prevent lookup-loops
             excludedRequestDomains: [
@@ -296,10 +309,10 @@ async function updateRules(targetGenericRules, targetDomainSpecificRules) {
     const genericRulesToAdd = targetGenericRules.filter(rule => !currentGenericRules.includes(rule));
     const genericRulesToRemove = currentGenericRules.filter(rule => !targetGenericRules.includes(rule));
 
-    const currentDsrHosts = currentDomainSpecificRules.map(rule => rule.condition.requestDomains[0]);
-    const targetDsrHosts = targetDomainSpecificRules.map(rule => rule.condition.requestDomains[0]);
-    const domainSpecificRulesToAdd = targetDomainSpecificRules.filter(rule => !currentDsrHosts.includes(rule.condition.requestDomains[0]));
-    const domainSpecificRulesToRemove = currentDomainSpecificRules.filter(rule => !targetDsrHosts.includes(rule.condition.requestDomains[0]));
+    const currentDsrHosts = currentDomainSpecificRules.map(rule => rule.condition.urlFilter);
+    const targetDsrHosts = targetDomainSpecificRules.map(rule => rule.condition.urlFilter);
+    const domainSpecificRulesToAdd = targetDomainSpecificRules.filter(rule => !currentDsrHosts.includes(rule.condition.urlFilter));
+    const domainSpecificRulesToRemove = currentDomainSpecificRules.filter(rule => !targetDsrHosts.includes(rule.condition.urlFilter));
 
     const rulesToAdd = genericRulesToAdd.concat(domainSpecificRulesToAdd);
     const rulesToRemoveIds = genericRulesToRemove.concat(domainSpecificRulesToRemove).map(rule => rule.id);
