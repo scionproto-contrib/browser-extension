@@ -1,8 +1,9 @@
 import {proxyAddress, proxyHostResolveParam, proxyHostResolvePath, proxyURLResolvePath} from "./proxy_handler.js";
 import {addDnrRule} from "./dnr_handler.js";
 import {policyCookie} from "./geofence_handler.js";
-import {addRequest, addTabResource, clearTabResources, getRequests, getSyncValue, GLOBAL_STRICT_MODE, PER_SITE_STRICT_MODE} from "../shared/storage.js";
+import {addRequest, addTabResource, clearTabResources, getRequests} from "../shared/storage.js";
 import {normalizedHostname, safeHostname} from "../shared/utilities.js";
+import {GlobalStrictMode, PerSiteStrictMode} from "../background.js";
 
 /**
  * General request interception concept:
@@ -132,19 +133,18 @@ function onBeforeRequest(details) {
 
         // if a mainframe is detected, immediately reset the tab resources (since a new page was opened in an existing tab,
         // thus previous information should be removed)
-        const globalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);
         if (details.type === "main_frame") {
             state = {gen: state.gen + 1, topOrigin: safeOrigin(details.url), currentDocId: null};
             tabState.set(tabId, state);
             // if global strict mode is on, clearing resources is handled by checking.html
-            if (!globalStrictMode) await clearTabResources(tabId);
+            if (!GlobalStrictMode) await clearTabResources(tabId);
 
             // from testing, mainframe requests usually did not contain a documentId, onCommitted mainframe requests
             // however do, so we handle setting the new documentId in the onCommitted method as it is generally invoked
             // before onBeforeRequest anyway
 
             // additionally, mainframe requests also do not contain an initiator, thus we can return here already
-            console.log(`[onBeforeRequest]: Got main_frame request for ${hostname}, resetting tab state: ${!globalStrictMode}.`, details);
+            console.log(`[onBeforeRequest]: Got main_frame request for ${hostname}, resetting tab state: ${!GlobalStrictMode}.`, details);
             return;
         }
 
@@ -169,15 +169,13 @@ function onBeforeRequest(details) {
         }
 
         // ===== CREATE TAB RESOURCES ENTRY =====
-        const perSiteStrictMode = (await getSyncValue(PER_SITE_STRICT_MODE)) || {};
-
         const requests = await getRequests();
         const hostnameScionEnabled = requests.find((request) => request.domain === hostname)?.scionEnabled;
 
         const initiatorHostname = safeHostname(details.initiator);
 
         // mainframe requests are already handled above and cannot reach this code, thus it is safe to assume that initiatorHostname exists
-        if (globalStrictMode || perSiteStrictMode[initiatorHostname]) {
+        if (GlobalStrictMode || PerSiteStrictMode[initiatorHostname]) {
             // if it has not been discovered previously, ignore it since the DNR redirect rule will catch it
             // in strict mode and then perform the lookup (or in case of perSiteStrictMode, the lookup is already
             // performed if the user enters an unknown url there)
@@ -299,17 +297,11 @@ async function createRequestEntry(hostname, initiator, currentTabId, scionEnable
  * if either is true, adds the rule depending on whether `scionEnabled` for this host.
  */
 async function handleAddDnrRule(hostname, scionEnabled, alreadyHasLock) {
-    const globalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);
-    const perSiteStrictMode = await getSyncValue(PER_SITE_STRICT_MODE);
+    const strictHosts = Object.entries(PerSiteStrictMode)
+        .filter(([, isScion]) => isScion)
+        .map(([host]) => normalizedHostname(host));
 
-    let strictHosts = [];
-    if (perSiteStrictMode) {
-        strictHosts = Object.entries(perSiteStrictMode)
-            .filter(([, isScion]) => isScion)
-            .map(([host]) => normalizedHostname(host));
-    }
-
-    if (globalStrictMode || strictHosts.includes(hostname)) {
+    if (GlobalStrictMode || strictHosts.includes(hostname)) {
         await addDnrRule(hostname, scionEnabled, alreadyHasLock);
     }
 }

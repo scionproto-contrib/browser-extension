@@ -1,7 +1,8 @@
-import {getRequests, getSyncValue, GLOBAL_STRICT_MODE, PER_SITE_STRICT_MODE} from "../shared/storage.js";
+import {getRequests} from "../shared/storage.js";
 import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD_URL} from "./proxy_handler.js";
 import {isHostScion} from "./request_interception_handler.js";
 import {normalizedHostname} from "../shared/utilities.js";
+import {GlobalStrictMode, PerSiteStrictMode} from "../background.js";
 
 /*
 General DNR (DeclarativeNetRequest) strategy:
@@ -50,18 +51,18 @@ const MAIN_FRAME_TYPE = ["main_frame"];
  *
  * Note that since this function is called from the service worker and these are ephemeral in MV3, this function will be called quite often (e.g. when the user opens a new tab).
  */
-export async function initializeDnr(globalStrictMode) {
+export async function initializeDnr() {
     console.log("Initializing DNR");
 
-    await setGlobalStrictMode(globalStrictMode);
+    await globalStrictModeUpdated();
 }
 
 /**
  * Function that enforces the global strict mode based on the boolean value passed in `globalStrictMode` by
  * installing DNR rules.
  */
-export async function setGlobalStrictMode(globalStrictMode) {
-    if (globalStrictMode) {
+export async function globalStrictModeUpdated() {
+    if (GlobalStrictMode) {
         await withLock(async () => {
             const [allowedHostsWithId, blockedHostsWithId] = await getAllowedAndBlockedHostsWithId();
 
@@ -83,23 +84,21 @@ export async function setGlobalStrictMode(globalStrictMode) {
     } else {
         // only handle perSiteStrictMode if global mode is off, otherwise global overrides them anyway
         // fallback to empty dictionary if no value was present in storage
-        const perSiteStrictMode = await getSyncValue(PER_SITE_STRICT_MODE) || {};
-        await setPerSiteStrictMode(perSiteStrictMode);
+        await perSiteStrictModeUpdated();
     }
 }
 
 /**
  * Updates the DNR rules to handle individual strict sites (which are based on the `perSiteStrictMode` parameter).
  */
-export async function setPerSiteStrictMode(perSiteStrictMode) {
+export async function perSiteStrictModeUpdated() {
     // if globalStrictMode is on, do not change any DNR rules
-    const globalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);
-    if (globalStrictMode) return;
+    if (GlobalStrictMode) return;
 
     await withLock(async () => {
         const [allowedHostsWithId, blockedHostsWithId] = await getAllowedAndBlockedHostsWithId();
 
-        const strictHosts = Object.entries(perSiteStrictMode)
+        const strictHosts = Object.entries(PerSiteStrictMode)
             .filter(([, isStrict]) => isStrict)
             .map(([host]) => normalizedHostname(host));
 
