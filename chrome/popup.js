@@ -1,11 +1,13 @@
 // Copyright 2024 ETH Zurich, Ovgu
 'use strict';
 
-const DEFAULT_PROXY_SCHEME = "https"
-const DEFAULT_PROXY_HOST = "forward-proxy.scion";
-const DEFAULT_PROXY_PORT = "9443";
-const proxyPathUsagePath = "/path-usage"
-const proxyHealthCheckPath = "/health"
+
+import {getSyncValue, getTabResources, PER_SITE_STRICT_MODE, saveSyncValue} from "./shared/storage.js";
+import {DEFAULT_PROXY_HOST, HTTPS_PROXY_SCHEME, HTTPS_PROXY_PORT, proxyPathUsagePath, proxyHealthCheckPath} from "./background_helpers/proxy_handler.js";
+import {safeHostname} from "./shared/utilities.js";
+
+const DEFAULT_PROXY_SCHEME = HTTPS_PROXY_SCHEME;
+const DEFAULT_PROXY_PORT = HTTPS_PROXY_PORT;
 
 const toggleRunning = document.getElementById('toggleRunning');
 const checkboxRunning = document.getElementById('checkboxRunning');
@@ -398,46 +400,34 @@ let proxyAddress = `${DEFAULT_PROXY_SCHEME}://${DEFAULT_PROXY_HOST}:${DEFAULT_PR
 
 var perSiteStrictMode = {};
 var popupMainDomain = "";
-var getRequestsDatabaseAdapter;
 
 checkboxRunning.onclick = toggleExtensionRunning;
 
 document.getElementById('button-options').addEventListener('click', function () {
-    chrome.tabs.create({ 'url': 'chrome://extensions/?options=' + chrome.runtime.id });
+    chrome.tabs.create({'url': 'chrome://extensions/?options=' + chrome.runtime.id});
 });
 
-// TODO: if there are some race conditions, add a startup
-// function that is called manually after all scripts are loaded
-// Let's later move to something that allows using imports and
-// maybe even typescript, e.g. https://github.com/abhijithvijayan/web-extension-starter
-(() => {
-    const src = chrome.extension.getURL('database.js');
-    import(src).then(req => {
-        getRequestsDatabaseAdapter = req.getRequestsDatabaseAdapter;
-        getStorageValue('perSiteStrictMode').then((val) => {
-            perSiteStrictMode = val || {};
-            loadRequestInfo();
-        });
+getSyncValue(PER_SITE_STRICT_MODE).then((val) => {
+    perSiteStrictMode = val || {};
+    loadRequestInfo();
+});
 
-    })
+document.addEventListener("DOMContentLoaded", () => {
+    chrome.storage.sync.get(
+        {
+            proxyScheme: DEFAULT_PROXY_SCHEME,
+            proxyHost: DEFAULT_PROXY_HOST,
+            proxyPort: DEFAULT_PROXY_PORT
+        },
+        (items) => {
+            const { proxyScheme, proxyHost, proxyPort } = items;
 
-})();
+            proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
 
-window.onload = function () {
-    chrome.storage.sync.get({
-        proxyScheme: DEFAULT_PROXY_SCHEME,
-        proxyHost: DEFAULT_PROXY_HOST,
-        proxyPort: DEFAULT_PROXY_PORT
-      }, (items) => {
-        let proxyScheme = items.proxyScheme;
-        let proxyHost = items.proxyHost;
-        let proxyPort = items.proxyPort;
-        proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
-
-        checkProxyStatus();
-    });
-    
-}
+            checkProxyStatus();
+        }
+    );
+});
 
 const updatePathUsage = () => {
     pathUsageContainer.innerHTML = "";
@@ -474,13 +464,13 @@ const updatePathUsage = () => {
 function checkProxyStatus() {
     proxyStatusMessage.textContent = "Checking proxy status...";
     proxyHelpLink.classList.add('hidden');
-    
+
     fetch(`${proxyAddress}${proxyHealthCheckPath}`, {
         method: "GET",
         signal: AbortSignal.timeout(2000)
     }).then(response => {
         if (response.status === 200) {
-            
+
             if (proxyAddress.startsWith('https://')) {
                 proxyStatusMessage.textContent = "Connected to proxy via HTTPS";
                 proxyStatusMessage.innerHTML += " <span>&#x2705;</span> ";
@@ -491,7 +481,7 @@ function checkProxyStatus() {
                 showProxyHelpLink();
             }
             const proxyDetailsContent = document.getElementById('proxy-details-content');
-            proxyDetailsContent.textContent = `Proxy at ${proxyAddress}`;            
+            proxyDetailsContent.textContent = `Proxy at ${proxyAddress}`;
         } else {
             // Show error message for non-200 responses
             console.warn("Proxy check failed:", response.status);
@@ -516,10 +506,10 @@ function checkProxyStatus() {
 function showProxyHelpLink() {
     proxyHelpLink.classList.remove('hidden');
     proxyHelpLink.href = chrome.runtime.getURL('proxy-help.html');
-    
-    proxyHelpLink.addEventListener('click', function(event) {
+
+    proxyHelpLink.addEventListener('click', function (event) {
         event.preventDefault();
-        chrome.tabs.create({ url: this.href });
+        chrome.tabs.create({url: this.href});
     });
 }
 
@@ -572,8 +562,8 @@ const newPathUsageChild = (pathUsage, index) => {
           <label class="ac-label" for="ac-${index}-path"><b>Path:</b></label>
           <article class="ac-sub-text">
            ${pathUsage.Path.map(ia =>
-            `<div><p>${ia} (${asNameMap[ia.split("-")[1]]})</p></div>`
-        ).join("")}
+        `<div><p>${ia} (${asNameMap[ia.split("-")[1]]})</p></div>`
+    ).join("")}
           </article >
         </div >
     </article >
@@ -650,90 +640,66 @@ function toggleExtensionRunning() {
         scionmode.innerHTML = "When available";
     }
 
-    saveStorageValue('perSiteStrictMode', newPerSiteStrictMode).then(() => {
+    saveSyncValue(PER_SITE_STRICT_MODE, newPerSiteStrictMode).then(() => {
         perSiteStrictMode = newPerSiteStrictMode;
     });
 
 }
 
 async function loadRequestInfo() {
-    const databaseAdapter = await getRequestsDatabaseAdapter();
+    const tabs = await chrome.tabs.query({active: true, currentWindow: true});
+    const activeTab = tabs[0];
+    const activeTabId = activeTab.id;
+    const hostname = safeHostname(activeTab.url);
+    popupMainDomain = hostname;
 
-    const checkedDomains = [];
-    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-        var activeTab = tabs[0];
-        var activeTabId = activeTab.id; // or do whatever you need
-        const url = new URL(activeTab.url);
-        popupMainDomain = url.hostname;
+    const resources = await getTabResources(activeTabId) ?? [];
+    const mainDomainSCIONEnabled = resources.find(resource => resource[0] === hostname && resource[1]);
 
-        let requests = await databaseAdapter.get({ mainDomain: url.hostname }, true);
-        const mainDomainSCIONEnabled = requests.find(r => r.tabId === activeTabId && r.domain === url.hostname && r.scionEnabled);
+    if (perSiteStrictMode[hostname]) {
+        mainDomain.innerHTML = "SCION preference for " + hostname;
+        toggleRunning.checked = true; // true
+        toggleRunning.classList.remove("halfchecked");
+        lineRunning.style.backgroundColor = "#48bb78";
+        scionmode.innerHTML = "Strict";
+    } else if (mainDomainSCIONEnabled) {
+        mainDomain.innerHTML = "SCION preference for " + hostname;
+        toggleRunning.checked = false; // true
+        toggleRunning.classList.add("halfchecked");
+        lineRunning.style.backgroundColor = "#cccccc";
+        scionmode.innerHTML = "When available";
+    } else {
+        scionModePreference.style.display = "none";
+    }// TODO: Else case would be no SCION... toggleRunning.checked = false;
 
-        if (perSiteStrictMode[url.hostname]) {
-            mainDomain.innerHTML = "SCION preference for " + url.hostname;
-            toggleRunning.checked = true; // true
-            toggleRunning.classList.remove("halfchecked");
-            lineRunning.style.backgroundColor = "#48bb78";
-            scionmode.innerHTML = "Strict";
-        } else if (mainDomainSCIONEnabled) {
-            mainDomain.innerHTML = "SCION preference for " + url.hostname;
-            toggleRunning.checked = false; // true
-            toggleRunning.classList.add("halfchecked");
-            lineRunning.style.backgroundColor = "#cccccc";
-            scionmode.innerHTML = "When available";
+    let mixedContent = false
+    for (const resource of resources) {
+        const domain = resource[0];
+        const scionEnabled = resource[1];
+
+        let p = document.createElement("p");
+        p.style.fontSize = "14px"
+        if (scionEnabled) {
+            p.innerHTML = "<span>&#x2705;</span> " + domain;
         } else {
-            scionModePreference.style.display = "none";
-        }// TODO: Else case would be no SCION... toggleRunning.checked = false;
-        requests = requests.filter(r => r.tabId === activeTabId);
-        console.log(requests);
-        let mixedContent = false;
-
-        for (let i = requests.length - 1; i >= 0; i--) {
-            const r = requests[i];
-            if (!checkedDomains.find(d => d === r.domain)) {
-                checkedDomains.push(r.domain);
-                let p = document.createElement("p");
-                p.style.fontSize = "14px"
-                if (r.scionEnabled) {
-                    p.innerHTML = "<span>&#x2705;</span> " + r.domain;
-                } else {
-                    mixedContent = true;
-                    p.innerHTML = "<span>&#x274C;</span> " + r.domain;
-                }
-
-                domainList.appendChild(p);
-            }
+            mixedContent = true;
+            p.innerHTML = "<span>&#x274C;</span> " + domain;
         }
-        requests.forEach(r => {
-            if (!checkedDomains.find(d => d === r.domain)) {
-                checkedDomains.push(r.domain);
-                const sEnabled = requests.find(r2 => r.domain === r2.domain && r2.scionEnabled);
-                let p = document.createElement("p");
-                p.style.fontSize = "14px"
-                if (sEnabled) {
-                    p.innerHTML = "<span>&#x2705;</span> " + r.domain;
-                } else {
-                    mixedContent = true;
-                    p.innerHTML = "<span>&#x274C;</span> " + r.domain;
-                }
 
-                domainList.appendChild(p);
-            }
-        });
+        domainList.appendChild(p);
+    }
 
-        if (mainDomainSCIONEnabled) {
-            if (mixedContent) {
-                scionsupport.innerHTML = "Not all resources loaded via SCION";
-            } else {
-                scionsupport.innerHTML = "All resources loaded via SCION";
-            }
+    if (mainDomainSCIONEnabled) {
+        if (mixedContent) {
+            scionsupport.innerHTML = "Not all resources loaded via SCION";
         } else {
-            scionsupport.innerHTML = "No resourced loaded via SCION";
+            scionsupport.innerHTML = "All resources loaded via SCION";
         }
-        
-        // Update path usage for the current domain
-        updatePathUsage();
-    });
+    } else {
+        scionsupport.innerHTML = "No resourced loaded via SCION";
+    }
 
+    // Update path usage for the current domain
+    updatePathUsage();
 }
 

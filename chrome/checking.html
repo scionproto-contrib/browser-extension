@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link href="css/tailwind.min.css" rel="stylesheet">
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+    <title>SCION Check</title>
+
+    <style>
+        /* overriding some tailwind styles */
+        body {
+            background: #121212;
+        }
+        h1 {
+            font-size: xx-large;
+        }
+        .spinner {
+            border-top-color: #ffffff;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body class="text-gray-100 m-0 p-8 flex flex-col items-center justify-center gap-4 font-sans">
+
+    <div id="spinner" class="spinner w-16 h-16 rounded-full border-4 border-white border-opacity-20" aria-hidden="true"></div>
+
+    <h1 id="title">Checking SCION compatibility...</h1>
+
+    <p id="status">Determining the original page you tried to open.</p>
+
+    <p id="original-url" class="font-mono break-all max-w-full text-center"></p>
+
+    <script type="module" src="checking.js"></script>
+</body>
+</html>
