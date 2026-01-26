@@ -1,3 +1,12 @@
+import {getSyncValues, PROXY_HOST, PROXY_PORT, PROXY_SCHEME, saveSyncValues, type SyncValueSchema} from "../shared/storage.js";
+import Mode = chrome.proxy.Mode;
+
+type ProxyConfig = {
+    [PROXY_SCHEME]: SyncValueSchema[typeof PROXY_SCHEME];
+    [PROXY_HOST]: SyncValueSchema[typeof PROXY_HOST];
+    [PROXY_PORT]: SyncValueSchema[typeof PROXY_PORT];
+} | null;
+
 const HTTP_PROXY_SCHEME = "http"
 const HTTP_PROXY_PORT = "9080";
 export const HTTPS_PROXY_SCHEME = "https"
@@ -38,21 +47,21 @@ export async function initializeProxyHandler() {
 }
 
 export async function loadProxySettings() {
-    const items = await chrome.storage.sync.get({
-        proxyScheme: HTTPS_PROXY_SCHEME,
-        proxyHost: DEFAULT_PROXY_HOST,
-        proxyPort: HTTPS_PROXY_PORT
+    const items = await getSyncValues({
+        [PROXY_SCHEME]: HTTPS_PROXY_SCHEME,
+        [PROXY_HOST]: DEFAULT_PROXY_HOST,
+        [PROXY_PORT]: HTTPS_PROXY_PORT,
     });
-    proxyScheme = items.proxyScheme;
-    proxyHost = items.proxyHost;
-    proxyPort = items.proxyPort;
+    proxyScheme = items[PROXY_SCHEME];
+    proxyHost = items[PROXY_HOST];
+    proxyPort = items[PROXY_PORT];
     proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
 
     await updateProxyConfiguration();
 }
 
 
-function parseProxyFromPAC(pacScript) {
+function parseProxyFromPAC(pacScript: string): ProxyConfig {
     // We look for the first HTTPS definition, if not found, we look for the first HTTP definition.
     const httpsProxyMatch = pacScript.match(/HTTPS\s+([^:]+):(\d+)/i);
     const httpProxyMatch = pacScript.match(/PROXY\s+([^:]+):(\d+)/i);
@@ -84,7 +93,7 @@ function parseProxyFromPAC(pacScript) {
     return null;
 }
 
-function isValidPort(port) {
+function isValidPort(port: string) {
     const portNum = parseInt(port, 10);
     return !isNaN(portNum) && portNum > 0 && portNum <= 65535;
 }
@@ -107,24 +116,23 @@ async function fetchAndApplyScionPAC() {
             proxyPort = proxyConfig.proxyPort;
             proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
 
-            await chrome.storage.sync.set({
-                proxyScheme: proxyScheme,
-                proxyHost: proxyHost,
-                proxyPort: proxyPort
-            }, function () {
-                console.log("Detected proxy configuration:", proxyAddress);
+            await saveSyncValues({
+                [PROXY_SCHEME]: proxyScheme,
+                [PROXY_HOST]: proxyHost,
+                [PROXY_PORT]: proxyPort,
             });
+            console.log("Detected proxy configuration:", proxyAddress);
 
             const config = {
-                mode: "pac_script",
+                mode: Mode.PAC_SCRIPT,
                 pacScript: {
                     data: pacScript
                 }
             };
 
-            await chrome.proxy.settings.set({value: config, scope: 'regular'}, function () {
-                console.log("SCION PAC configuration from WPAD applied");
-            });
+            await chrome.proxy.settings.set({value: config, scope: 'regular'});
+
+            console.log("SCION PAC configuration from WPAD applied");
         } else {
             throw new Error("Failed to parse PAC script");
         }
@@ -149,7 +157,7 @@ async function fallbackToDefaults() {
     }
 }
 
-async function tryProxyConnection(scheme, port) {
+async function tryProxyConnection(scheme: string, port: string) {
     const testUrl = `${scheme}://${DEFAULT_PROXY_HOST}:${port}${proxyHealthCheckPath}`;
     console.log(`Testing proxy connection to ${testUrl}`);
 
@@ -169,19 +177,18 @@ async function tryProxyConnection(scheme, port) {
     }
 }
 
-async function setProxyConfiguration(scheme, host, port) {
+async function setProxyConfiguration(scheme: string, host: string, port: string) {
     proxyScheme = scheme;
     proxyHost = host;
     proxyPort = port;
     proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
 
-    await chrome.storage.sync.set({
-        proxyScheme: proxyScheme,
-        proxyHost: proxyHost,
-        proxyPort: proxyPort
-    }, function () {
-        console.log(`Using proxy configuration: ${proxyAddress}`);
+    await saveSyncValues({
+        [PROXY_SCHEME]: proxyScheme,
+        [PROXY_HOST]: proxyHost,
+        [PROXY_PORT]: proxyPort,
     });
+    console.log(`Using proxy configuration: ${proxyAddress}`);
 
     await updateProxyConfiguration();
 }
@@ -190,7 +197,7 @@ async function setProxyConfiguration(scheme, host, port) {
 // direct everything to the forward-proxy except if the target is the forward-proxy, then go direct
 async function updateProxyConfiguration() {
     const config = {
-        mode: "pac_script",
+        mode: Mode.PAC_SCRIPT,
         pacScript: {
             data:
                 "function FindProxyForURL(url, host) {\n" +
@@ -206,7 +213,7 @@ async function updateProxyConfiguration() {
     await chrome.proxy.settings.set({value: config, scope: 'regular'});
 
     console.log("Proxy configuration updated");
-    await chrome.proxy.settings.get({}, function (config) {
-        console.log(config);
-    });
+
+    const proxyConfig = await chrome.proxy.settings.get({});
+    console.log(proxyConfig);
 }

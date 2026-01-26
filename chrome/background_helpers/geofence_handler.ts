@@ -1,11 +1,15 @@
 import {getSyncValue, ISD_WHITELIST} from "../shared/storage.js";
 import {proxyAddress, proxyHost, proxyPolicyPath, proxyScheme} from "./proxy_handler.js";
 
-export let policyCookie = null;
+type Cookie = chrome.cookies.Cookie;
+type SetDetailsNullable = chrome.cookies.SetDetails | null;
+type SetDetails = chrome.cookies.SetDetails;
+
+export let policyCookie: SetDetailsNullable = null;
 
 export function resetPolicyCookie() { policyCookie = null; }
 
-export function allowAllgeofence(allowAll) {
+export function allowAllgeofence(allowAll: boolean) {
     console.log("allowAllgeofence: ", allowAll)
 
     if (allowAll) {
@@ -17,14 +21,14 @@ export function allowAllgeofence(allowAll) {
 
     getSyncValue(ISD_WHITELIST).then((isdSet) => {
         console.log(isdSet)
-        geofence(isdSet);
+        if (isdSet) geofence(isdSet);
     });
 }
 
-export function geofence(isdList) {
+export function geofence(isdList: string[]) {
     console.log("geofence: ", isdList)
 
-    let whitelist = []
+    let whitelist: string[] = []
     for (const isd of isdList) {
         whitelist.push("+ " + isd);
     }
@@ -36,15 +40,14 @@ export function geofence(isdList) {
 // 1. all cookies and cached proxy authorization credentials are deleted
 // 2. the Skip proxy is updated with the new policy
 // 3. the path policy cookie is globally stored and will be used as proxy authorization from now on
-function setPolicy(policy) {
+function setPolicy(policy: string[]) {
     let sendSetPolicyRequest = () => {
         const url = `${proxyAddress}${proxyPolicyPath}`;
         fetch(url, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json; charset=utf-8' },
             body: JSON.stringify(policy)
-        })
-            .then(async (res) => {
+        }).then(async (res: Response) => {
                 const text = await res.text();
 
                 // The fetch operation is complete. This could mean that either the data transfer has been completed successfully or failed.
@@ -54,9 +57,9 @@ function setPolicy(policy) {
                     throw new Error(`PUT ${url} failed: ${res.status} ${res.statusText} — ${text}`);
                 }
 
-                chrome.cookies.getAll({name: "caddy-scion-forward-proxy"}, function (cookies) {
+                chrome.cookies.getAll({name: "caddy-scion-forward-proxy"}, function (cookies: Cookie[]) {
                     console.log("all cookies: ", cookies)
-                    cookies = cookies.filter((c) => c.domain == proxyHost)
+                    cookies = cookies.filter((c: Cookie) => c.domain == proxyHost)
                     if (cookies.length > 1) {
                         console.log("expected at most one cookie")
                         for (const c of cookies) {
@@ -65,7 +68,7 @@ function setPolicy(policy) {
                     }
 
                     if (cookies.length > 0) {
-                        policyCookie = cookies[0]
+                        const cookie: Cookie = cookies[0];
                         console.log("new path policy cookie: ", cookies[0])
 
                         // when we set the cookie before (function below), the cookie
@@ -74,13 +77,21 @@ function setPolicy(policy) {
                         // Since it is convoluted to remove one of the cookies, we just set the cookie again
                         // to avoid inconsistencies between the two of them. Otherwise, calls to /path-usage (which carry the cookie)
                         // have been observer to yield incorrect information.
+                        let details: SetDetails = policyCookie ??= ({} as SetDetails);
+                        details.name = cookie.name;
+                        details.domain = cookie.domain;
+                        details.value = cookie.value;
+                        details.httpOnly = cookie.httpOnly;
+                        details.path = cookie.path;
+                        details.expirationDate = cookie.expirationDate;
+                        details.partitionKey = cookie.partitionKey;
+                        details.sameSite = cookie.sameSite;
+                        details.secure = cookie.secure;
+                        details.storeId = cookie.storeId;
 
-                        // we have to remove some fields that are not allowed to be set
-                        // by the API
-                        delete policyCookie["hostOnly"];
-                        delete policyCookie["session"];
-                        policyCookie.url = `${proxyScheme}://${proxyHost}`;
-                        chrome.cookies.set(policyCookie)
+                        details.url = `${proxyScheme}://${proxyHost}`;
+                        policyCookie = details;
+                        chrome.cookies.set(policyCookie);
                     }
                 })
             })
@@ -100,9 +111,9 @@ function setPolicy(policy) {
 
             chrome.cookies.set(policyCookie, () => {
                 chrome.cookies.get({
-                    url: policyCookie.url,
-                    name: policyCookie.name
-                }, (resultCookie) => {
+                    url: policyCookie!.url,
+                    name: policyCookie!.name!,
+                }, (resultCookie: Cookie | null) => {
                     console.log("Stored cookie:", resultCookie);
                 });
 

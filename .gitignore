@@ -4,3 +4,10 @@ build/
 .vscode/
 node_modules/
 .as_name_map.js
+
+# typescript
+dist/
+**/*.d.ts
+**/*.d.ts.map
+**/*.js
+**/*.js.map

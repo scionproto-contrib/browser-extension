@@ -2,26 +2,31 @@
 'use strict';
 
 
-import {getSyncValue, getTabResources, PER_SITE_STRICT_MODE, saveSyncValue} from "./shared/storage.js";
+import {getSyncValue, getSyncValues, getTabResources, PER_SITE_STRICT_MODE, PROXY_HOST, PROXY_PORT, PROXY_SCHEME, saveSyncValue, type SyncValueSchema} from "./shared/storage.js";
 import {DEFAULT_PROXY_HOST, HTTPS_PROXY_SCHEME, HTTPS_PROXY_PORT, proxyPathUsagePath, proxyHealthCheckPath} from "./background_helpers/proxy_handler.js";
 import {safeHostname} from "./shared/utilities.js";
+
+type Tab = chrome.tabs.Tab;
+type PerDomainPathUsage = { Domain: string, Path: string[], Strategy: string };
+type ProxyPathUsageResponse = PerDomainPathUsage[];
 
 const DEFAULT_PROXY_SCHEME = HTTPS_PROXY_SCHEME;
 const DEFAULT_PROXY_PORT = HTTPS_PROXY_PORT;
 
-const toggleRunning = document.getElementById('toggleRunning');
-const checkboxRunning = document.getElementById('checkboxRunning');
-const lineRunning = document.getElementById("lineRunning");
-const scionmode = document.getElementById("scionmode");
-const mainDomain = document.getElementById("maindomain");
-const pathUsageContainer = document.getElementById("path-usage-container");
-const scionModePreference = document.getElementById('scionModePreference');
-const domainList = document.getElementById("domainlist");
-const scionsupport = document.getElementById("scionsupport");
-const proxyStatusMessage = document.getElementById('proxy-status-message');
-const proxyHelpLink = document.getElementById('proxy-help-link');
+const toggleRunning = document.getElementById('toggleRunning') as HTMLInputElement;
+const checkboxRunning = document.getElementById('checkboxRunning') as HTMLDivElement;
+const lineRunning = document.getElementById("lineRunning") as HTMLDivElement;
+const scionmode = document.getElementById("scionmode") as HTMLSpanElement;
+const mainDomain = document.getElementById("maindomain") as HTMLDivElement;
+const pathUsageContainer = document.getElementById("path-usage-container")!;
+const scionModePreference = document.getElementById('scionModePreference') as HTMLDivElement;
+const domainList = document.getElementById("domainlist") as HTMLDivElement;
+const scionsupport = document.getElementById("scionsupport") as HTMLHeadingElement;
+const proxyStatusMessage = document.getElementById('proxy-status-message') as HTMLSpanElement;
+const proxyHelpLink = document.getElementById('proxy-help-link') as HTMLAnchorElement;
+const buttonOptionsButton = document.getElementById('button-options') as HTMLButtonElement;
 
-const asNameMap = {
+const asNameMap: Record<string, string> = {
     "88": "Princeton University - CITP",
     "225": "University of Virginia",
     "559": "SWITCH",
@@ -398,35 +403,33 @@ const asNameMap = {
 let proxyAddress = `${DEFAULT_PROXY_SCHEME}://${DEFAULT_PROXY_HOST}:${DEFAULT_PROXY_PORT}`
 
 
-var perSiteStrictMode = {};
-var popupMainDomain = "";
+let perSiteStrictMode: SyncValueSchema[typeof PER_SITE_STRICT_MODE] = {};
+let popupMainDomain = "";
 
 checkboxRunning.onclick = toggleExtensionRunning;
 
-document.getElementById('button-options').addEventListener('click', function () {
+buttonOptionsButton.addEventListener('click', function () {
     chrome.tabs.create({'url': 'chrome://extensions/?options=' + chrome.runtime.id});
 });
 
-getSyncValue(PER_SITE_STRICT_MODE).then((val) => {
-    perSiteStrictMode = val || {};
+getSyncValue(PER_SITE_STRICT_MODE, {}).then((result) => {
+    perSiteStrictMode = result;
     loadRequestInfo();
 });
 
 document.addEventListener("DOMContentLoaded", () => {
-    chrome.storage.sync.get(
-        {
-            proxyScheme: DEFAULT_PROXY_SCHEME,
-            proxyHost: DEFAULT_PROXY_HOST,
-            proxyPort: DEFAULT_PROXY_PORT
-        },
-        (items) => {
-            const { proxyScheme, proxyHost, proxyPort } = items;
+    getSyncValues({
+        [PROXY_SCHEME]: DEFAULT_PROXY_SCHEME,
+        [PROXY_HOST]: DEFAULT_PROXY_HOST,
+        [PROXY_PORT]: DEFAULT_PROXY_PORT,
+    }).then((result) => {
+        let proxyScheme = result[PROXY_SCHEME];
+        let proxyHost = result[PROXY_HOST];
+        let proxyPort = result[PROXY_PORT];
+        proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
 
-            proxyAddress = `${proxyScheme}://${proxyHost}:${proxyPort}`;
-
-            checkProxyStatus();
-        }
-    );
+        checkProxyStatus();
+    });
 });
 
 const updatePathUsage = () => {
@@ -437,13 +440,15 @@ const updatePathUsage = () => {
         method: "GET"
     }).then(response => {
         if (response.status === 200) {
-            response.json().then(json => {
+            response.json().then(res => {
+                const json = res as ProxyPathUsageResponse;
                 console.log(json)
                 const startIndex = 2; // The first indices are already used the parent container
                 if (!json || json.length === 0) {
                     pathUsageContainer.innerHTML = "<p>No path usage data available\n</p>" + "<p>Try to configure your own policies to have acces to path usage data (under <i>Manage Preferences</i>).</p>";
                 }
-                json.forEach((pathUsage) => {
+
+                json.forEach((pathUsage: PerDomainPathUsage) => {
                     console.log(pathUsage.Domain.split(":")[0])
                     // we only expect one match
                     if (popupMainDomain && pathUsage.Domain.split(":")[0] === popupMainDomain) {
@@ -465,6 +470,7 @@ function checkProxyStatus() {
     proxyStatusMessage.textContent = "Checking proxy status...";
     proxyHelpLink.classList.add('hidden');
 
+    const proxyDetailsContent = document.getElementById('proxy-details-content')!;
     fetch(`${proxyAddress}${proxyHealthCheckPath}`, {
         method: "GET",
         signal: AbortSignal.timeout(2000)
@@ -480,14 +486,12 @@ function checkProxyStatus() {
                 proxyStatusMessage.innerHTML += " <span>&#x26A0;</span> ";
                 showProxyHelpLink();
             }
-            const proxyDetailsContent = document.getElementById('proxy-details-content');
             proxyDetailsContent.textContent = `Proxy at ${proxyAddress}`;
         } else {
             // Show error message for non-200 responses
             console.warn("Proxy check failed:", response.status);
             proxyStatusMessage.textContent = "Failed to connect to proxy";
             proxyStatusMessage.innerHTML += " <span>#x274C;</span> ";
-            const proxyDetailsContent = document.getElementById('proxy-details-content');
             proxyDetailsContent.textContent = `Proxy at ${proxyAddress}`;
             showProxyHelpLink();
         }
@@ -497,7 +501,6 @@ function checkProxyStatus() {
         proxyStatusMessage.textContent = "Failed to connect to proxy";
         proxyStatusMessage.innerHTML += " <span>&#x274C;</span> ";
         showProxyHelpLink();
-        const proxyDetailsContent = document.getElementById('proxy-details-content');
         proxyDetailsContent.textContent = `Proxy at ${proxyAddress}`;
     });
 }
@@ -513,13 +516,16 @@ function showProxyHelpLink() {
     });
 }
 
-const newPathUsageChild = (pathUsage, index) => {
+const newPathUsageChild = (pathUsage: PerDomainPathUsage, index: number) => {
     // This is at the moment just for presentation purposes and needs to be
     // rewritten in the end...
     console.log("path usage: ", pathUsage)
-    const isds = new Set(pathUsage.Path.map(v => v.split("-")[0]));
+    const isds: Set<number> = new Set(pathUsage.Path.map((v: string) => {
+        const isd: string = v.split("-")[0];
+        return Number.parseInt(isd);
+    }));
     const ases = new Set(pathUsage.Path.map(v => v.split("-")[1]));
-    const flagMap = {
+    const flagMap: Record<string, string> = {
         "EU": "images/european-union.png",
         "CH": "images/switzerland.png",
         "AWS": "images/amazon.png",
@@ -547,30 +553,30 @@ const newPathUsageChild = (pathUsage, index) => {
         <p><b>ISDs:</b></p>
 
         <div class="flag-container">
-        ${[...isds].map(isd =>
-        `<div class="flag">
+            ${[...isds].map((isd: number) =>
+            `<div class="flag">
                 <img src=${flagMap[returnCountryCode(isd)]}>
                 <div class="description">
                     <p>(${returnCountryCode(isd)})</p>
                 </div>
             </div>
-        `).join("")}
+            `).join("")}
         </div>
        
         <div class="ac-sub">
-          <input class="ac-input" id="ac-${index}-path" name="ac-${index}-path" type="checkbox" />
-          <label class="ac-label" for="ac-${index}-path"><b>Path:</b></label>
-          <article class="ac-sub-text">
-           ${pathUsage.Path.map(ia =>
-        `<div><p>${ia} (${asNameMap[ia.split("-")[1]]})</p></div>`
-    ).join("")}
-          </article >
+            <input class="ac-input" id="ac-${index}-path" name="ac-${index}-path" type="checkbox" />
+            <label class="ac-label" for="ac-${index}-path"><b>Path:</b></label>
+            <article class="ac-sub-text">
+                ${pathUsage.Path.map(ia =>
+                    `<div><p>${ia} (${asNameMap[ia.split("-")[1]]})</p></div>`
+                ).join("")}
+            </article >
         </div >
     </article >
 </div > `)
 }
 
-function humanFileSize(bytes, si = false, dp = 1) {
+function humanFileSize(bytes: number, si = false, dp = 1) {
     const thresh = si ? 1000 : 1024;
 
     if (Math.abs(bytes) < thresh) {
@@ -592,8 +598,8 @@ function humanFileSize(bytes, si = false, dp = 1) {
     return bytes.toFixed(dp) + ' ' + units[u];
 }
 
-function returnCountryCode(isd) {
-    const isdMap = {
+function returnCountryCode(isd: number) {
+    const isdMap: Record<number, string> = {
         // Assignments used by SCIONLab
         19: "EU",
         17: "CH",
@@ -613,13 +619,13 @@ function returnCountryCode(isd) {
         69: "RESERVED",
         70: "SSFN",
         71: "SCIERA",
-        72: "HVR"
+        72: "HVR",
     }
-    let code = isdMap[isd];
+    let code: string | undefined = isdMap[isd];
     if (code === undefined) {
-        return "UNKNOWN"
+        return "UNKNOWN";
     }
-    return code
+    return code;
 }
 
 // Start/Stop global forwarding
@@ -647,11 +653,25 @@ function toggleExtensionRunning() {
 }
 
 async function loadRequestInfo() {
-    const tabs = await chrome.tabs.query({active: true, currentWindow: true});
-    const activeTab = tabs[0];
-    const activeTabId = activeTab.id;
+    const tabs: Tab[] = await chrome.tabs.query({active: true, currentWindow: true});
+    const activeTab: Tab = tabs[0];
+    if (activeTab.url === undefined) {
+        console.error("[Popup]: activeTab.url was undefined");
+        return;
+    }
+
     const hostname = safeHostname(activeTab.url);
+    if (hostname === null) {
+        console.error("[Popup]: error extracting hostname from url", activeTab.url);
+        return;
+    }
     popupMainDomain = hostname;
+
+    const activeTabId = activeTab.id;
+    if (activeTabId === undefined) {
+        console.error("[Popup]: activeTabId was undefined for page with hostname: ", hostname);
+        return;
+    }
 
     const resources = await getTabResources(activeTabId) ?? [];
     const mainDomainSCIONEnabled = resources.find(resource => resource[0] === hostname && resource[1]);
