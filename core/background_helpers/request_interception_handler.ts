@@ -108,14 +108,13 @@ function withTabLock(tabId: number, fn: (() => Promise<void>)) {
     return next;
 }
 
-// map that maps the tabId to a state (of type: { gen, topOrigin, currentDocumentId }
-const GEN = "gen" as const;
-const TOP_ORIGIN = "topOrigin" as const;
-const CURRENT_DOCUMENT_ID = "currentDocumentId" as const;
+// only chrome requests contain a documentId
+// => firefox relies solely on the requesting origin, chrome uses it as a fallback option
+const REQUEST_ORIGIN = "requestOrigin" as const;
+const CHROME_DOCUMENT_ID = "chromeDocumentId" as const;
 type State = {
-    [GEN]: number;
-    [TOP_ORIGIN]: string | null;
-    [CURRENT_DOCUMENT_ID]: string | null;
+    [REQUEST_ORIGIN]: string | null;
+    [CHROME_DOCUMENT_ID]: string | null;
 }
 
 const tabState = new Map<number, State>();
@@ -158,13 +157,12 @@ function onCommitted(details: OnCommittedDetailsType) {
     // this logic here most likely ignores iframes...
     if (details.frameId !== 0) return;
 
-    const docId = isChromium() ? (details.documentId ?? null) : (details.url);
+    // documentId is chrome-only, for main-frame requests, only onCommitted's details contain the documentId
+    const docId = isChromium() ? (details.documentId ?? null) : null;
     withTabLock(details.tabId, async () => {
-        const state = tabState.get(details.tabId) ?? {[GEN]: 0, [TOP_ORIGIN]: null, [CURRENT_DOCUMENT_ID]: null};
         tabState.set(details.tabId, {
-            ...state,
-            [TOP_ORIGIN]: safeOrigin(details.url),
-            [CURRENT_DOCUMENT_ID]: docId,
+            [REQUEST_ORIGIN]: safeOrigin(details.url),
+            [CHROME_DOCUMENT_ID]: docId,
         });
     });
 }
@@ -180,17 +178,18 @@ function onBeforeRequest(details: OnBeforeRequestDetails): undefined {
     // Note: Since `details.initiator` only exists in the chromium API, we use Firefox's `originUrl` as
     // an alternative depending on the browser in use
     const initiator = isChromium() ? details.initiator : details.originUrl;
+    const initiatorOrigin = initiator ? safeOrigin(initiator) : null;
 
     const hostname = safeProtocolFilteredHostname(details.url);
     if (!hostname) return;
 
     withTabLock(tabId, async () => {
-        let state = tabState.get(tabId) ?? {[GEN]: 0, [TOP_ORIGIN]: null, [CURRENT_DOCUMENT_ID]: null};
-
         // if a mainframe is detected, immediately reset the tab resources (since a new page was opened in an existing tab,
         // thus previous information should be removed)
         if (details.type === "main_frame") {
-            state = {[GEN]: state[GEN] + 1, [TOP_ORIGIN]: safeOrigin(details.url), [CURRENT_DOCUMENT_ID]: null};
+            // in chrome, documentId is only present in requests to sub-resources when in onBeforeRequest, onCommitted however
+            // does contain a documentId for main-frame requests
+            const state = {[REQUEST_ORIGIN]: safeOrigin(details.url), [CHROME_DOCUMENT_ID]: null};
             tabState.set(tabId, state);
             // if global strict mode is on, clearing resources is handled by checking.html
             if (!GlobalStrictMode) await clearTabResources(tabId);
@@ -204,25 +203,41 @@ function onBeforeRequest(details: OnBeforeRequestDetails): undefined {
             return;
         }
 
-        // ignore requests if the documentId does not match the one observed in onCommitted
+        const state = tabState.get(tabId) ?? {[REQUEST_ORIGIN]: null, [CHROME_DOCUMENT_ID]: null};
+
         // If the case (was never the case in testing) should occur where onCommitted is invoked after a subresource
         // invokes onBeforeRequest, it is currently ignored. A future fix would be keep a buffer of non-matching requests.
         // Due to results from testing and simplicity (since this is purely for UI information), it was left out for now.
         // Note: Since chromium supports only documentId and firefox supports only documentUrl, we need to differentiate between browsers
-        const docId = isChromium() ? (details.documentId) : details.documentUrl;
-        const currentDocId = state[CURRENT_DOCUMENT_ID];
+        if (isChromium()) {
+            // ===== CHROMIUM =====
+            const docId = details.documentId;
+            const currentDocId = state[CHROME_DOCUMENT_ID];
 
-        // note that the two following if-statements are intentionally left empty for improved structure/documentation
-        if (currentDocId && docId && docId === currentDocId) {
-            // accept and handle request if the documentId matches the committed documentId stored in the state
-        } else if (currentDocId && !docId && state[TOP_ORIGIN] && initiator === state[TOP_ORIGIN]) {
-            // fallback solution in case a request does not contain a documentId at all:
-            // if the initiator matches the url that was present in the onCommitted call of the mainframe, that is
-            // also accepted and handled
+            // note that the two following if-statements are intentionally left empty for improved structure/documentation
+            if (currentDocId && docId && docId === currentDocId) {
+                // accept and handle request if the documentId matches the committed documentId stored in the state
+            } else if (currentDocId && !docId && state[REQUEST_ORIGIN] && initiatorOrigin === state[REQUEST_ORIGIN]) {
+                // fallback solution in case a request does not contain a documentId at all:
+                // if the initiator matches the url that was present in the onCommitted call of the mainframe, that is
+                // also accepted and handled
+            } else {
+                // reject cases where the documentId and initiator do not match
+                console.log("[onBeforeRequest, chrome]: Seems to be a request unrelated to the current tab: ", details, state);
+                return;
+            }
         } else {
-            // reject cases where the documentId and initiator do not match
-            console.log("[onBeforeRequest]: Seems to be a request unrelated to the current tab: ", details);
-            return;
+            // ===== FIREFOX =====
+            // note that the following if-statement is intentionally left empty for improved structure/documentation
+            if (state[REQUEST_ORIGIN] && initiatorOrigin === state[REQUEST_ORIGIN]) {
+                // firefox does not contain a documentId in its requests
+                // if the initiator origin matches the origin of the url that was present in the onCommitted call of
+                // the main-frame, it is accepted
+            } else {
+                // reject cases where the origins do not match
+                console.log("[onBeforeRequest, firefox]: Seems to be a request unrelated to the current tab: ", details, state);
+                return;
+            }
         }
 
         // ===== CREATE TAB RESOURCES ENTRY =====
@@ -298,7 +313,7 @@ function onHeadersReceived(details: OnHeadersReceivedDetails): undefined {
         });
 
         async function asyncHelper() {
-            const initiator = details.initiator;
+            const initiator = isChromium() ? details.initiator : details.originUrl;
             const initiatorHostname = initiator ? safeHostname(initiator) : null;
             if (initiatorHostname === null) console.log("[onHeadersReceived]: Failed to extract hostname from initiator: ", details);
             await handleAddDnrRule(targetHostname!, scionEnabled, false);
