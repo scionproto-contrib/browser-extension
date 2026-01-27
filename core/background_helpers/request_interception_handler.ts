@@ -2,7 +2,7 @@ import {proxyAddress, proxyHostResolveParam, proxyHostResolvePath, proxyURLResol
 import {addDnrRule} from "./dnr_handler.js";
 import {policyCookie} from "./geofence_handler.js";
 import {addRequest, addTabResource, clearTabResources, DOMAIN, getRequests, MAIN_DOMAIN, SCION_ENABLED, type RequestSchema} from "../shared/storage.js";
-import {normalizedHostname, safeHostname} from "../shared/utilities.js";
+import {isChromium, normalizedHostname, safeHostname} from "../shared/utilities.js";
 import {GlobalStrictMode, PerSiteStrictMode} from "../background.js";
 import type {WebNavigation, WebRequest} from "webextension-polyfill";
 
@@ -381,17 +381,4 @@ async function handleAddDnrRule(hostname: string, scionEnabled: boolean, already
     if (GlobalStrictMode || strictHosts.includes(hostname)) {
         await addDnrRule(hostname, scionEnabled, alreadyHasLock);
     }
-}
-
-/**
- * Returns whether the current environment is Chromium-based.
- *
- * This is evaluated by checking the extension URL which is of the form: `<browser>-extension://<extension-UUID>`
- * where `<browser>` is:
- * - `chrome` for Chromium-based browsers like Opera, Brave or Chrome
- * - `moz` for Firefox
- */
-function isChromium(): boolean {
-    const extensionUrl = browser.runtime.getURL("");
-    return extensionUrl.includes("chrome");
 }

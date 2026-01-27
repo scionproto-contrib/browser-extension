@@ -1,7 +1,7 @@
 import {DOMAIN, getRequests, type RequestSchema} from "../shared/storage.js";
 import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD_URL} from "./proxy_handler.js";
 import {isHostScion} from "./request_interception_handler.js";
-import {normalizedHostname} from "../shared/utilities.js";
+import {isChromium, normalizedHostname} from "../shared/utilities.js";
 import {GlobalStrictMode, PerSiteStrictMode} from "../background.js";
 import type {DeclarativeNetRequest} from "webextension-polyfill";
 
@@ -41,36 +41,15 @@ const SUBRESOURCES_REDIRECT_RULE_ID = 3;
 // sufficiently high to have space for generic DNR rules (specified above)
 const DOMAIN_SPECIFIC_RULES_START_ID = 10000;
 
-const EXT_PAGE = browser.runtime.getURL('/checking.html');
+const CHECKING_PAGE = browser.runtime.getURL('/checking.html');
 
 // extracting the hostname from the WPAD URL, as it needs to be excluded from matching rules
 // note that this might cause other resources that share the same hostname to be excluded too
 const WPAD_HOSTNAME = new URL(WPAD_URL).hostname;
 
 const MAIN_FRAME_TYPE: ResourceType[] = ["main_frame"];
-const ALL_RESOURCE_TYPES: ResourceType[] = [
-    "main_frame",
-    "sub_frame",
-    "stylesheet",
-    "script",
-    "image",
-    "object",
-    "object_subrequest",
-    "xmlhttprequest",
-    "xslt",
-    "ping",
-    "beacon",
-    "xml_dtd",
-    "font",
-    "media",
-    "websocket",
-    "csp_report",
-    "imageset",
-    "web_manifest",
-    "speculative",
-    "json",
-    "other",
-];
+const FIREFOX_ALL_RESOURCE_TYPES: ResourceType[] = ["main_frame", "sub_frame", "stylesheet", "script", "image", "object", "object_subrequest", "xmlhttprequest", "xslt", "ping", "beacon", "xml_dtd", "font", "media", "websocket", "csp_report", "imageset", "web_manifest", "speculative", "json", "other"];
+const CHROME_ALL_RESOURCE_TYPES: ResourceType[] = ["main_frame", "sub_frame", "xmlhttprequest", "script", "image", "font", "media", "stylesheet", "object", "other", "ping", "websocket", "csp_report"];
 
 /**
  * Initializes the DNR handler.
@@ -223,7 +202,7 @@ function createBlockRule(host: string, id: number): Rule {
         action: {type: 'block'},
         condition: {
             urlFilter: urlFilterFromHost(host),
-            resourceTypes: ALL_RESOURCE_TYPES
+            resourceTypes: isChromium() ? CHROME_ALL_RESOURCE_TYPES : FIREFOX_ALL_RESOURCE_TYPES
         }
     };
 }
@@ -235,7 +214,7 @@ function createAllowRule(host: string, id: number): Rule {
         action: {type: 'allow'},
         condition: {
             urlFilter: urlFilterFromHost(host),
-            resourceTypes: ALL_RESOURCE_TYPES
+            resourceTypes: isChromium() ? CHROME_ALL_RESOURCE_TYPES : FIREFOX_ALL_RESOURCE_TYPES
         }
     }
 }
@@ -260,7 +239,7 @@ function createMainFrameRedirectRule(): Rule {
             type: 'redirect',
             redirect: {
                 // match entire URL and append it to a hash (separator character expected by checking.js)
-                regexSubstitution: EXT_PAGE + '#\\0',
+                regexSubstitution: CHECKING_PAGE + '#\\0',
             },
         },
         condition: {
