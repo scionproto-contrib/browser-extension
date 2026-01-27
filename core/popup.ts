@@ -419,6 +419,7 @@ getSyncValue(PER_SITE_STRICT_MODE, {}).then((result) => {
 });
 
 document.addEventListener("DOMContentLoaded", () => {
+    toggleRunning.addEventListener("change", toggleExtensionRunning);
     getSyncValues({
         [PROXY_SCHEME]: DEFAULT_PROXY_SCHEME,
         [PROXY_HOST]: DEFAULT_PROXY_HOST,
