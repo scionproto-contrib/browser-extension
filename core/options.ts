@@ -19,7 +19,7 @@ import {
     saveSyncValue,
     saveSyncValues
 } from "./shared/storage.js";
-import {DEFAULT_PROXY_HOST, HTTPS_PROXY_PORT, HTTPS_PROXY_SCHEME} from "./background_helpers/proxy_handler.js";
+import {DEFAULT_PROXY_HOST, HTTPS_PROXY_PORT, HTTPS_PROXY_SCHEME, type OnMessageMessageType} from "./background_helpers/proxy_handler.js";
 
 const DEFAULT_PROXY_SCHEME = HTTPS_PROXY_SCHEME;
 const DEFAULT_PROXY_PORT = HTTPS_PROXY_PORT;
@@ -258,7 +258,8 @@ function updateProxyFormState(isAutoConfig: boolean) {
     });
     
     if (isAutoConfig) {
-      chrome.runtime.sendMessage({ action: "fetchAndApplyScionPAC" });
+        const message: OnMessageMessageType = {action: "fetchAndApplyScionPAC"};
+        browser.runtime.sendMessage(message);
     }
 }
 

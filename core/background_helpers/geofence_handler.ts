@@ -1,13 +1,16 @@
 import {getSyncValue, ISD_WHITELIST} from "../shared/storage.js";
 import {proxyAddress, proxyHost, proxyPolicyPath, proxyScheme} from "./proxy_handler.js";
+import type {Cookies} from "webextension-polyfill";
 
-type Cookie = chrome.cookies.Cookie;
-type SetDetailsNullable = chrome.cookies.SetDetails | null;
-type SetDetails = chrome.cookies.SetDetails;
+type Cookie = Cookies.Cookie;
+type SetDetailsNullable = Cookies.SetDetailsType | null;
+type SetDetails = Cookies.SetDetailsType;
 
 export let policyCookie: SetDetailsNullable = null;
 
-export function resetPolicyCookie() { policyCookie = null; }
+export function resetPolicyCookie() {
+    policyCookie = null;
+}
 
 export function allowAllgeofence(allowAll: boolean) {
     console.log("allowAllgeofence: ", allowAll)
@@ -45,82 +48,81 @@ function setPolicy(policy: string[]) {
         const url = `${proxyAddress}${proxyPolicyPath}`;
         fetch(url, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json; charset=utf-8' },
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
             body: JSON.stringify(policy)
         }).then(async (res: Response) => {
-                const text = await res.text();
+            const text = await res.text();
 
-                // The fetch operation is complete. This could mean that either the data transfer has been completed successfully or failed.
-                console.log("response code to setPolicy:" + res.status);
-                console.log("set policy: ", JSON.stringify(policy))
-                if (!res.ok) {
-                    throw new Error(`PUT ${url} failed: ${res.status} ${res.statusText} — ${text}`);
+            // The fetch operation is complete. This could mean that either the data transfer has been completed successfully or failed.
+            console.log("response code to setPolicy:" + res.status);
+            console.log("set policy: ", JSON.stringify(policy))
+            if (!res.ok) {
+                throw new Error(`PUT ${url} failed: ${res.status} ${res.statusText} — ${text}`);
+            }
+
+            let cookies: Cookie[] = await browser.cookies.getAll({name: "caddy-scion-forward-proxy"});
+            console.log("all cookies: ", cookies)
+            cookies = cookies.filter((c: Cookie) => c.domain == proxyHost)
+            if (cookies.length > 1) {
+                console.log("expected at most one cookie")
+                for (const c of cookies) {
+                    console.log(c.name, c.value, c.domain)
+
                 }
+            }
 
-                chrome.cookies.getAll({name: "caddy-scion-forward-proxy"}, function (cookies: Cookie[]) {
-                    console.log("all cookies: ", cookies)
-                    cookies = cookies.filter((c: Cookie) => c.domain == proxyHost)
-                    if (cookies.length > 1) {
-                        console.log("expected at most one cookie")
-                        for (const c of cookies) {
-                            console.log(c.name, c.value, c.domain)
-                        }
-                    }
+            if (cookies.length > 0) {
+                const cookie: Cookie = cookies[0];
+                console.log("new path policy cookie: ", cookies[0])
 
-                    if (cookies.length > 0) {
-                        const cookie: Cookie = cookies[0];
-                        console.log("new path policy cookie: ", cookies[0])
+                // when we set the cookie before (function below), the cookie
+                // is set with ".forward-proxy.scion" as domain (probably since we remove the hostOnly [because of the API]).
+                // The incoming cookie is set with "forward-proxy.scion" as domain.
+                // Since it is convoluted to remove one of the cookies, we just set the cookie again
+                // to avoid inconsistencies between the two of them. Otherwise, calls to /path-usage (which carry the cookie)
+                // have been observer to yield incorrect information.
+                let details: SetDetails = policyCookie ??= ({} as SetDetails);
+                details.name = cookie.name;
+                details.domain = cookie.domain;
+                details.value = cookie.value;
+                details.httpOnly = cookie.httpOnly;
+                details.path = cookie.path;
+                details.expirationDate = cookie.expirationDate;
+                details.partitionKey = cookie.partitionKey;
+                details.sameSite = cookie.sameSite;
+                details.secure = cookie.secure;
+                details.storeId = cookie.storeId;
 
-                        // when we set the cookie before (function below), the cookie
-                        // is set with ".forward-proxy.scion" as domain (probably since we remove the hostOnly [because of the API]).
-                        // The incoming cookie is set with "forward-proxy.scion" as domain.
-                        // Since it is convoluted to remove one of the cookies, we just set the cookie again
-                        // to avoid inconsistencies between the two of them. Otherwise, calls to /path-usage (which carry the cookie)
-                        // have been observer to yield incorrect information.
-                        let details: SetDetails = policyCookie ??= ({} as SetDetails);
-                        details.name = cookie.name;
-                        details.domain = cookie.domain;
-                        details.value = cookie.value;
-                        details.httpOnly = cookie.httpOnly;
-                        details.path = cookie.path;
-                        details.expirationDate = cookie.expirationDate;
-                        details.partitionKey = cookie.partitionKey;
-                        details.sameSite = cookie.sameSite;
-                        details.secure = cookie.secure;
-                        details.storeId = cookie.storeId;
-
-                        details.url = `${proxyScheme}://${proxyHost}`;
-                        policyCookie = details;
-                        chrome.cookies.set(policyCookie);
-                    }
-                })
-            })
-            .catch((err) => {
-                console.error('PUT failed:', err);
-            });
+                details.url = `${proxyScheme}://${proxyHost}`;
+                policyCookie = details;
+                await browser.cookies.set(policyCookie);
+            }
+        }).catch((err) => {
+            console.error('PUT failed:', err);
+        });
     }
 
+    const hostname = new URL(`${proxyScheme}://${proxyHost}`).hostname;
     // this not only clears all cookies but also the proxy auth credentials
-    chrome.browsingData.remove({
-        "origins": [
-            `${proxyScheme}://${proxyHost}`
-        ]
-    }, {"cookies": true}, () => {
+    browser.browsingData.remove(
+        {"hostnames": [hostname]},
+        {"cookies": true},
+    ).then(() => {
+
         // as we have just removed all cookie we have to readd it
         if (policyCookie != null) {
+            browser.cookies.set(policyCookie).then(async () => {
+                const resultCookie: Cookie | null = await browser.cookies.get({
 
-            chrome.cookies.set(policyCookie, () => {
-                chrome.cookies.get({
                     url: policyCookie!.url,
                     name: policyCookie!.name!,
-                }, (resultCookie: Cookie | null) => {
-                    console.log("Stored cookie:", resultCookie);
                 });
+                console.log("Stored cookie:", resultCookie);
 
                 sendSetPolicyRequest()
-            })
+            });
         } else {
             sendSetPolicyRequest()
         }
-    })
+    });
 }

@@ -44,7 +44,7 @@ getSyncValue(EXTENSION_RUNNING).then(async extensionRunning => {
 
 /*--- storage ----------------------------------------------------------------*/
 
-chrome.storage.onChanged.addListener(async (changes, namespace) => {
+browser.storage.onChanged.addListener(async (changes, namespace) => {
     // In case we disable running for the extension, lets put an empty set for now
     // Later, we could remove the PAC script, but doesn't impact us now...
     if (namespace === "sync") {
@@ -90,9 +90,9 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
 // Changes icon depending on the extension is running or not
 async function updateRunningIcon(extensionRunning: any) {
     if (extensionRunning) {
-        await chrome.action.setIcon({path: "/images/scion-38.jpg"});
+        await browser.action.setIcon({path: "/images/scion-38.jpg"});
     } else {
-        await chrome.action.setIcon({path: "/images/scion-38_disabled.jpg"});
+        await browser.action.setIcon({path: "/images/scion-38_disabled.jpg"});
     }
 }
 

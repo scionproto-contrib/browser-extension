@@ -1,5 +1,8 @@
-import {getSyncValues, PROXY_HOST, PROXY_PORT, PROXY_SCHEME, saveSyncValues, type SyncValueSchema} from "../shared/storage.js";
-import Mode = chrome.proxy.Mode;
+import {AUTO_PROXY_CONFIG, getSyncValue, getSyncValues, PROXY_HOST, PROXY_PORT, PROXY_SCHEME, saveSyncValues, type SyncValueSchema} from "../shared/storage.js";
+
+export type OnMessageMessageType = {
+    action: string;
+}
 
 type ProxyConfig = {
     [PROXY_SCHEME]: SyncValueSchema[typeof PROXY_SCHEME];
@@ -31,17 +34,18 @@ export const WPAD_URL = `http://wpad/wpad_scion.dat`;
 
 export async function initializeProxyHandler() {
     // Load saved configuration at startup
-    const {autoProxyConfig} = await chrome.storage.sync.get({autoProxyConfig: true});
-    if (autoProxyConfig) {
-        await fetchAndApplyScionPAC();
-    } else {
-        await loadProxySettings();
-    }
+    getSyncValue(AUTO_PROXY_CONFIG, true).then((autoProxyConfig) => {
+        if (autoProxyConfig) {
+            fetchAndApplyScionPAC();
+        } else {
+            loadProxySettings();
+        }
+    });
 
-    chrome.runtime.onMessage.addListener(async function (request, sender, sendResponse) {
-        if (request.action === "fetchAndApplyScionPAC") {
-            await fetchAndApplyScionPAC();
-            return true;
+    browser.runtime.onMessage.addListener(function (request: any) {
+        const message = request as OnMessageMessageType;
+        if (message.action === "fetchAndApplyScionPAC") {
+            fetchAndApplyScionPAC();
         }
     });
 }
@@ -124,13 +128,13 @@ async function fetchAndApplyScionPAC() {
             console.log("Detected proxy configuration:", proxyAddress);
 
             const config = {
-                mode: Mode.PAC_SCRIPT,
+                mode: "pac_script",
                 pacScript: {
                     data: pacScript
                 }
             };
 
-            await chrome.proxy.settings.set({value: config, scope: 'regular'});
+            await browser.proxy.settings.set({value: config, scope: 'regular'});
 
             console.log("SCION PAC configuration from WPAD applied");
         } else {
@@ -378,7 +382,7 @@ async function setProxyConfiguration(scheme: string, host: string, port: string)
 // direct everything to the forward-proxy except if the target is the forward-proxy, then go direct
 async function updateProxyConfiguration() {
     const config = {
-        mode: Mode.PAC_SCRIPT,
+        mode: "pac_script",
         pacScript: {
             data:
                 "function FindProxyForURL(url, host) {\n" +
@@ -391,10 +395,10 @@ async function updateProxyConfiguration() {
         }
     };
 
-    await chrome.proxy.settings.set({value: config, scope: 'regular'});
+    await browser.proxy.settings.set({value: config, scope: 'regular'});
 
     console.log("Proxy configuration updated");
 
-    const proxyConfig = await chrome.proxy.settings.get({});
+    const proxyConfig = await browser.proxy.settings.get({});
     console.log(proxyConfig);
 }

@@ -8,6 +8,8 @@ node_modules/
 # typescript
 dist/
 **/*.d.ts
+# explicitly allow global.d.ts, as it is required to provide context for type annotations in IDEs
+!core/global.d.ts
 **/*.d.ts.map
 **/*.js
 **/*.js.map

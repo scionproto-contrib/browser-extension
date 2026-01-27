@@ -4,11 +4,24 @@ import {policyCookie} from "./geofence_handler.js";
 import {addRequest, addTabResource, clearTabResources, DOMAIN, getRequests, MAIN_DOMAIN, SCION_ENABLED, type RequestSchema} from "../shared/storage.js";
 import {normalizedHostname, safeHostname} from "../shared/utilities.js";
 import {GlobalStrictMode, PerSiteStrictMode} from "../background.js";
-type WebNavigationTransitionCallbackDetails = chrome.webNavigation.WebNavigationTransitionCallbackDetails;
-type OnBeforeRequestDetails = chrome.webRequest.OnBeforeRequestDetails;
-type OnHeadersReceivedDetails = chrome.webRequest.OnHeadersReceivedDetails;
-type OnAuthRequiredDetails = chrome.webRequest.OnAuthRequiredDetails;
-type OnErrorOccurredDetails = chrome.webRequest.OnErrorOccurredDetails;
+import type {WebNavigation, WebRequest} from "webextension-polyfill";
+
+type OnBeforeRequestDetails = WebRequest.OnBeforeRequestDetailsType;
+type OnHeadersReceivedDetails = WebRequest.OnHeadersReceivedDetailsType;
+// type OnCommittedDetailsType = WebNavigation.OnCommittedDetailsType;
+type OnAuthRequiredDetails = WebRequest.OnAuthRequiredDetailsType;
+type OnErrorOccurredDetails = WebRequest.OnErrorOccurredDetailsType;
+
+// TODO: verify that this works, as the polyfill type does not support documentId, but both firefox and chrome do...
+type OnCommittedDetailsType = {
+    tabId: number
+    url: string
+    frameId: number
+    transitionType: WebNavigation.TransitionType
+    transitionQualifiers: WebNavigation.TransitionQualifier[]
+    timeStamp: number
+    documentId?: string | undefined
+}
 
 /**
  * General request interception concept:
@@ -17,16 +30,16 @@ type OnErrorOccurredDetails = chrome.webRequest.OnErrorOccurredDetails;
  * - this return value can be detected and intercepted in the `onHeadersReceived` function
  */
 export function initializeRequestInterceptionListeners() {
-    chrome.webRequest.onBeforeRequest.addListener(onBeforeRequest, {urls: ["<all_urls>"]});
+    browser.webRequest.onBeforeRequest.addListener(onBeforeRequest, {urls: ["<all_urls>"]});
 
-    chrome.webRequest.onHeadersReceived.addListener(onHeadersReceived, {urls: ["<all_urls>"]});
+    browser.webRequest.onHeadersReceived.addListener(onHeadersReceived, {urls: ["<all_urls>"]});
 
     // in manifest version 3 (MV3), the onAuthRequired is the only listener that still supports and accepts the 'blocking' extraInfoSpec
-    chrome.webRequest.onAuthRequired.addListener(onAuthRequired, {urls: ["<all_urls>"]}, ['blocking']);
+    browser.webRequest.onAuthRequired.addListener(onAuthRequired, {urls: ["<all_urls>"]}, ['blocking']);
 
-    chrome.webRequest.onErrorOccurred.addListener(onErrorOccurred, {urls: ["<all_urls>"]});
+    browser.webRequest.onErrorOccurred.addListener(onErrorOccurred, {urls: ["<all_urls>"]});
 
-    chrome.webNavigation.onCommitted.addListener(onCommitted);
+    browser.webNavigation.onCommitted.addListener(onCommitted);
 }
 
 export async function isHostScion(hostname: string, initiator: string, currentTabId: number, alreadyHasLock = false) {
@@ -105,7 +118,7 @@ function safeOrigin(url: string | URL) {
  * preventing delayed requests from the previous webpage displayed in the same tab to be counted as requests of the
  * current webpage (which would result in those old requests showing up in the popup).
  */
-function onCommitted(details: WebNavigationTransitionCallbackDetails) {
+function onCommitted(details: OnCommittedDetailsType) {
     if (details.tabId < 0) return;
 
     // this logic here most likely ignores iframes...
@@ -128,7 +141,7 @@ function onCommitted(details: WebNavigationTransitionCallbackDetails) {
  */
 function onBeforeRequest(details: OnBeforeRequestDetails): undefined {
     const tabId = details.tabId;
-    if (tabId === chrome.tabs.TAB_ID_NONE || tabId < 0) return;
+    if (tabId === browser.tabs.TAB_ID_NONE || tabId < 0) return;
 
     const hostname = safeProtocolFilteredHostname(details.url);
     if (!hostname) return;
@@ -157,7 +170,7 @@ function onBeforeRequest(details: OnBeforeRequestDetails): undefined {
         // If the case (was never the case in testing) should occur where onCommitted is invoked after a subresource
         // invokes onBeforeRequest, it is currently ignored. A future fix would be keep a buffer of non-matching requests.
         // Due to results from testing and simplicity (since this is purely for UI information), it was left out for now.
-        const docId = details.documentId ?? null;
+        const docId = null; // TODO: firefox only supports documentUrl, which looks like it might be a replacement
         const currentDocId = state.currentDocId;
 
         // note that the two following if-statements are intentionally left empty for improved structure/documentation
@@ -299,7 +312,7 @@ async function createRequestEntry(hostname: string, initiator: string, currentTa
         [SCION_ENABLED]: requestDBEntry[SCION_ENABLED],
     });
 
-    if (currentTabId !== chrome.tabs.TAB_ID_NONE) await addTabResource(currentTabId, hostname, scionEnabled);
+    if (currentTabId !== browser.tabs.TAB_ID_NONE) await addTabResource(currentTabId, hostname, scionEnabled);
 }
 
 /**

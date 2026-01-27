@@ -1,28 +1,30 @@
 import {clearAllTabResources, clearTabResources, getTabResources} from "../shared/storage.js";
 import {safeHostname} from "../shared/utilities.js";
-type Tab = chrome.tabs.Tab;
+import type {Tabs} from "webextension-polyfill";
+
+type Tab = Tabs.Tab;
 
 export function initializeTabListeners() {
     // User switches between tabs
-    chrome.tabs.onActivated.addListener(async function (activeInfo) {
-        const tab = await chrome.tabs.get(activeInfo.tabId);
+    browser.tabs.onActivated.addListener(async function (activeInfo) {
+        const tab = await browser.tabs.get(activeInfo.tabId);
         await handleTabChange(tab);
     });
 
     // Update icon depending on hostname of current active tab
-    chrome.tabs.onUpdated.addListener(async function (tabId, changeInfo, tab) {
+    browser.tabs.onUpdated.addListener(async function (tabId, changeInfo, tab) {
         await handleTabChange(tab);
     });
 
     // when a tab is closed, remove any information that was associated with that tab (resources it requested)
-    chrome.tabs.onRemoved.addListener(async function (tabId) {
+    browser.tabs.onRemoved.addListener(async function (tabId) {
         await clearTabResources(tabId);
     });
 
     // when a window is created, and it is the only open window (i.e. browser just launched), clear all knowledge about the tabs
     // this functionality is only needed if the browser crashes and thus, the tabs' and windows' onRemoved event doesn't fire
-    chrome.windows.onCreated.addListener(async function (window) {
-        const windows = await chrome.windows.getAll();
+    browser.windows.onCreated.addListener(async function (window) {
+        const windows = await browser.windows.getAll();
         let onlySingleWindowOpen = true;
         for (const w of windows) {
             if (w.id !== window.id) {
@@ -56,13 +58,12 @@ export async function handleTabChange(tab: Tab) {
         }
 
         if (mainDomainSCIONEnabled) {
-            if (mixedContent) {
-                await chrome.action.setIcon({path: "/images/scion-38_mixed.jpg"});
-            } else {
-                await chrome.action.setIcon({path: "/images/scion-38_enabled.jpg"});
-            }
+            if (mixedContent)
+                await browser.action.setIcon({path: "/images/scion-38_mixed.jpg"});
+            else
+                await browser.action.setIcon({path: "/images/scion-38_enabled.jpg"});
         } else {
-            await chrome.action.setIcon({path: "/images/scion-38_not_available.jpg"});
+            await browser.action.setIcon({path: "/images/scion-38_not_available.jpg"});
         }
 
         return;
@@ -82,9 +83,9 @@ export async function handleTabChange(tab: Tab) {
     }
 
     if (allNonScion)
-        await chrome.action.setIcon({path: "/images/scion-38_not_available.jpg"});
+        await browser.action.setIcon({path: "/images/scion-38_not_available.jpg"});
     else if (allScion)
-        await chrome.action.setIcon({path: "/images/scion-38_enabled.jpg"});
+        await browser.action.setIcon({path: "/images/scion-38_enabled.jpg"});
     else
-        await chrome.action.setIcon({path: "/images/scion-38_mixed.jpg"});
+        await browser.action.setIcon({path: "/images/scion-38_mixed.jpg"});
 }

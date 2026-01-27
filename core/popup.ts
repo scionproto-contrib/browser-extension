@@ -5,8 +5,9 @@
 import {getSyncValue, getSyncValues, getTabResources, PER_SITE_STRICT_MODE, PROXY_HOST, PROXY_PORT, PROXY_SCHEME, saveSyncValue, type SyncValueSchema} from "./shared/storage.js";
 import {DEFAULT_PROXY_HOST, HTTPS_PROXY_SCHEME, HTTPS_PROXY_PORT, proxyPathUsagePath, proxyHealthCheckPath} from "./background_helpers/proxy_handler.js";
 import {safeHostname} from "./shared/utilities.js";
+import type {Tabs} from "webextension-polyfill";
 
-type Tab = chrome.tabs.Tab;
+type Tab = Tabs.Tab;
 type PerDomainPathUsage = { Domain: string, Path: string[], Strategy: string };
 type ProxyPathUsageResponse = PerDomainPathUsage[];
 
@@ -409,7 +410,7 @@ let popupMainDomain = "";
 checkboxRunning.onclick = toggleExtensionRunning;
 
 buttonOptionsButton.addEventListener('click', function () {
-    chrome.tabs.create({'url': 'chrome://extensions/?options=' + chrome.runtime.id});
+    browser.tabs.create({'url': 'chrome://extensions/?options=' + browser.runtime.id});
 });
 
 getSyncValue(PER_SITE_STRICT_MODE, {}).then((result) => {
@@ -508,11 +509,11 @@ function checkProxyStatus() {
 
 function showProxyHelpLink() {
     proxyHelpLink.classList.remove('hidden');
-    proxyHelpLink.href = chrome.runtime.getURL('proxy-help.html');
+    proxyHelpLink.href = browser.runtime.getURL('proxy-help.html');
 
     proxyHelpLink.addEventListener('click', function (event) {
         event.preventDefault();
-        chrome.tabs.create({url: this.href});
+        browser.tabs.create({url: this.href});
     });
 }
 
@@ -653,7 +654,7 @@ function toggleExtensionRunning() {
 }
 
 async function loadRequestInfo() {
-    const tabs: Tab[] = await chrome.tabs.query({active: true, currentWindow: true});
+    const tabs: Tab[] = await browser.tabs.query({active: true, currentWindow: true});
     const activeTab: Tab = tabs[0];
     if (activeTab.url === undefined) {
         console.error("[Popup]: activeTab.url was undefined");

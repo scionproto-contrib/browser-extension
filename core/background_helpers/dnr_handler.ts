@@ -3,9 +3,10 @@ import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD
 import {isHostScion} from "./request_interception_handler.js";
 import {normalizedHostname} from "../shared/utilities.js";
 import {GlobalStrictMode, PerSiteStrictMode} from "../background.js";
-import ResourceType = chrome.declarativeNetRequest.ResourceType;
+import type {DeclarativeNetRequest} from "webextension-polyfill";
 
-type Rule = chrome.declarativeNetRequest.Rule;
+type ResourceType = DeclarativeNetRequest.ResourceType;
+type Rule = DeclarativeNetRequest.Rule;
 
 /*
 General DNR (DeclarativeNetRequest) strategy:
@@ -40,29 +41,27 @@ const SUBRESOURCES_REDIRECT_RULE_ID = 3;
 // sufficiently high to have space for generic DNR rules (specified above)
 const DOMAIN_SPECIFIC_RULES_START_ID = 10000;
 
-const EXT_PAGE = chrome.runtime.getURL('/checking.html');
+const EXT_PAGE = browser.runtime.getURL('/checking.html');
 
 // extracting the hostname from the WPAD URL, as it needs to be excluded from matching rules
 // note that this might cause other resources that share the same hostname to be excluded too
 const WPAD_HOSTNAME = new URL(WPAD_URL).hostname;
 
-const MAIN_FRAME_TYPE: ResourceType[] = [ResourceType.MAIN_FRAME];
-const ALL_RESOURCE_TYPES = [
-    ResourceType.MAIN_FRAME,
-    ResourceType.SUB_FRAME,
-    ResourceType.XMLHTTPREQUEST,
-    ResourceType.SCRIPT,
-    ResourceType.IMAGE,
-    ResourceType.FONT,
-    ResourceType.MEDIA,
-    ResourceType.STYLESHEET,
-    ResourceType.OBJECT,
-    ResourceType.OTHER,
-    ResourceType.PING,
-    ResourceType.WEBSOCKET,
-    ResourceType.WEBTRANSPORT,
-    ResourceType.WEBBUNDLE,
-    ResourceType.CSP_REPORT,
+const MAIN_FRAME_TYPE: ResourceType[] = ["main_frame"];
+const ALL_RESOURCE_TYPES: ResourceType[] = [
+    "main_frame",
+    "sub_frame",
+    "xmlhttprequest",
+    "script",
+    "image",
+    "font",
+    "media",
+    "stylesheet",
+    "object",
+    "other",
+    "ping",
+    "websocket",
+    "csp_report",
 ];
 
 /**
@@ -130,7 +129,7 @@ export async function perSiteStrictModeUpdated() {
             else {
                 // using chrome.tabs.TAB_ID_NONE as the tab id, as no tab can be associated with this request
                 // isHostScion already adds the appropriate DNR rules based on the lookup result (including creating the DB entry for the host)
-                await isHostScion(strictHost, strictHost, chrome.tabs.TAB_ID_NONE, true);
+                await isHostScion(strictHost, strictHost, browser.tabs.TAB_ID_NONE, true);
             }
         }
 
@@ -152,7 +151,7 @@ export async function perSiteStrictModeUpdated() {
  * the {@link proxyAddress} and therefore need to be updated.
  */
 export async function updateProxySettingsInDnrRules() {
-    const currentRules = await chrome.declarativeNetRequest.getDynamicRules();
+    const currentRules = await browser.declarativeNetRequest.getDynamicRules();
     let hasSRR = false; // sub-resources redirect rule
     let hasSIRR = false; // sub-resources initiator redirect rule
     let initiatorRuleBlockedInitiators: string[] = [];
@@ -184,7 +183,7 @@ export async function updateProxySettingsInDnrRules() {
         toRemoveIds.push(SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID);
     }
 
-    await chrome.declarativeNetRequest.updateDynamicRules({addRules: toAdd, removeRuleIds: toRemoveIds});
+    await browser.declarativeNetRequest.updateDynamicRules({addRules: toAdd, removeRuleIds: toRemoveIds});
 }
 
 /**
@@ -195,12 +194,12 @@ export async function addDnrRule(host: string, scionEnabled: boolean, alreadyHas
         const id = (await getNFreeIds(1))[0];
 
         // if a rule for the `host` already exists, do not add another rule
-        const currentRules = await chrome.declarativeNetRequest.getDynamicRules();
+        const currentRules = await browser.declarativeNetRequest.getDynamicRules();
         const currentUrlFilters = currentRules.map(rule => rule.condition.urlFilter);
         if (currentUrlFilters.includes(urlFilterFromHost(host))) return;
 
         const rule = scionEnabled ? createAllowRule(host, id) : createBlockRule(host, id);
-        await chrome.declarativeNetRequest.updateDynamicRules({addRules: [rule], removeRuleIds: []})
+        await browser.declarativeNetRequest.updateDynamicRules({addRules: [rule], removeRuleIds: []})
     };
     if (alreadyHasLock) {
         await run();
@@ -344,7 +343,7 @@ async function getAllowedAndBlockedHostsWithId() {
  * Note that this function is unsafe and must be wrapped with `withLock`.
  */
 async function getNFreeIds(n: number): Promise<number[]> {
-    const currentRules: Rule[] = await chrome.declarativeNetRequest.getDynamicRules();
+    const currentRules: Rule[] = await browser.declarativeNetRequest.getDynamicRules();
     const usedIds = new Set(currentRules.map(rule => rule.id));
     const idList = new Set(Array.from({length: n + usedIds.size}, (_, i) => i + DOMAIN_SPECIFIC_RULES_START_ID));
     return Array.from(idList.difference(usedIds));
@@ -358,7 +357,7 @@ async function getNFreeIds(n: number): Promise<number[]> {
  * @param targetDomainSpecificRules is an array of domain specific rules (created by `createBlockRule` and `createAllowRule`) that should be active from this point onward.
  */
 async function updateRules(targetGenericRules: Rule[], targetDomainSpecificRules: Rule[]) {
-    const currentRules = await chrome.declarativeNetRequest.getDynamicRules();
+    const currentRules = await browser.declarativeNetRequest.getDynamicRules();
     let currentGenericRules = [];
     let currentDomainSpecificRules = [];
     for (const currentRule of currentRules) {
@@ -376,7 +375,7 @@ async function updateRules(targetGenericRules: Rule[], targetDomainSpecificRules
 
     const rulesToAdd = genericRulesToAdd.concat(domainSpecificRulesToAdd);
     const rulesToRemoveIds = genericRulesToRemove.concat(domainSpecificRulesToRemove).map(rule => rule.id);
-    await chrome.declarativeNetRequest.updateDynamicRules({addRules: rulesToAdd, removeRuleIds: rulesToRemoveIds});
+    await browser.declarativeNetRequest.updateDynamicRules({addRules: rulesToAdd, removeRuleIds: rulesToRemoveIds});
 }
 
 /**

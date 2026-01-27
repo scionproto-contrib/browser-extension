@@ -146,7 +146,7 @@ export async function addTabResource(tabId: number, resourceHostname: string, re
 
     // in case a website needs to verify its scion capability and this information arrives after tabs.onUpdated or tabs.onActivated,
     // this call ensures the icon is updated properly (which is used to display the info on the popup)
-    const tab = await chrome.tabs.get(tabId);
+    const tab = await browser.tabs.get(tabId);
     await handleTabChange(tab);
 }
 
@@ -243,20 +243,20 @@ export async function addRequest<K extends keyof RequestSchema>(entry: RequestSc
 
 // ===== CHROME STORAGE WRAPPER FUNCTIONS =====
 export async function saveSyncValue<K extends keyof SyncValueSchema>(key: K, value: SyncValueSchema[K]) {
-    await chrome.storage.sync.set({[key]: value});
+    await browser.storage.sync.set({[key]: value});
 }
 
 export async function getSyncValue<K extends keyof SyncValueSchema>(key: K): Promise<SyncValueSchema[K] | undefined>;
 export async function getSyncValue<K extends keyof SyncValueSchema>(key: K, fallback: SyncValueSchema[K]): Promise<SyncValueSchema[K]>;
 
 export async function getSyncValue<K extends keyof SyncValueSchema>(key: K, fallback?: SyncValueSchema[K]): Promise<SyncValueSchema[K] | undefined> {
-    const result = await chrome.storage.sync.get([key]);
+    const result = await browser.storage.sync.get([key]);
     if (result && result[key]) return result[key] as SyncValueSchema[K];
     return fallback;
 }
 
 export async function saveSyncValues<K extends keyof SyncValueSchema>(keyValuePairs: Partial<Record<K, SyncValueSchema[K]>>) {
-    await chrome.storage.sync.set(keyValuePairs);
+    await browser.storage.sync.set(keyValuePairs);
 }
 
 /**
@@ -279,36 +279,36 @@ export async function saveSyncValues<K extends keyof SyncValueSchema>(keyValuePa
  */
 export async function getSyncValues<K extends keyof SyncValueSchema>(keysWithFallbacks: Pick<SyncValueSchema, K>): Promise<Pick<SyncValueSchema, K>> {
     const keys = Object.keys(keysWithFallbacks) as K[];
-    const storage = (await chrome.storage.sync.get(keys)) as Partial<Pick<SyncValueSchema, K>>;
+    const storage = (await browser.storage.sync.get(keys)) as Partial<Pick<SyncValueSchema, K>>;
     const result = {} as Pick<SyncValueSchema, K>;
     for (const key of keys) result[key] = storage[key] ?? keysWithFallbacks[key];
     return result;
 }
 
 async function saveLocalValue<K extends keyof LocalValueSchema>(key: K, value: LocalValueSchema[K]) {
-    await chrome.storage.local.set({[key]: value});
+    await browser.storage.local.set({[key]: value});
 }
 
 async function getLocalValue<K extends keyof LocalValueSchema>(key: K): Promise<LocalValueSchema[K]> {
-    const result = await chrome.storage.local.get([key]);
+    const result = await browser.storage.local.get([key]);
     return result[key] as LocalValueSchema[K];
 }
 
 async function saveSessionValue(key: keyof SessionValueSchema, value: SessionValueSchema[string]) {
-    await chrome.storage.session.set({[key]: value});
+    await browser.storage.session.set({[key]: value});
 }
 
 async function getSessionValue(key: keyof SessionValueSchema): Promise<SessionValueSchema[string] | undefined> {
-    const result = await chrome.storage.session.get([key]);
+    const result = await browser.storage.session.get([key]);
     const typedResult = result as SessionValueSchema | undefined;
     if (typedResult === undefined) return undefined;
     return typedResult[key];
 }
 
 async function getAllSessionValues(): Promise<SessionValueSchema> {
-    return await chrome.storage.session.get();
+    return await browser.storage.session.get() as SessionValueSchema;
 }
 
 async function removeSessionValues(keys: string[]) {
-    await chrome.storage.session.remove(keys);
+    await browser.storage.session.remove(keys);
 }
