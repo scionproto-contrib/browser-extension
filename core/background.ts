@@ -21,12 +21,12 @@ const initializeExtension = async () => {
     const storageGlobalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);
     GlobalStrictMode = storageGlobalStrictMode ?? false;
     if (storageGlobalStrictMode === undefined) await saveSyncValue(GLOBAL_STRICT_MODE, GlobalStrictMode);
-    console.log(`[initializeExtension]: GlobalStrictMode: ${GlobalStrictMode}`);
+    console.log("[initializeExtension]: GlobalStrictMode:", GlobalStrictMode);
 
     const storagePerSiteStrictMode = await getSyncValue(PER_SITE_STRICT_MODE);
     PerSiteStrictMode = storagePerSiteStrictMode ?? {};
     if (storagePerSiteStrictMode === undefined) await saveSyncValue(PER_SITE_STRICT_MODE, PerSiteStrictMode);
-    console.log(`[initializeExtension]: PerSiteStrictMode: ${PerSiteStrictMode}`);
+    console.log("[initializeExtension]: PerSiteStrictMode:", PerSiteStrictMode);
 
     /*--- PAC --------------------------------------------------------------------*/
     // initializing proxy handler before DNR, as some DNR rules rely on the `proxyAddress`
