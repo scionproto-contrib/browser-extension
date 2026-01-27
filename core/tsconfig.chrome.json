@@ -1,0 +1,7 @@
+// tsconfig.chrome.json
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist/chrome"
+  }
+}
