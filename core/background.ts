@@ -1,6 +1,10 @@
 // Copyright 2024 ETH Zurich, Ovgu
 'use strict';
 
+// polyfill must only be imported in background.ts as the first import statement, loads the `browser` namespace into `globalThis`
+// such that `browser.*` can be used everywhere (other contexts like popup and options are handled separately)
+import "./vendor/browser-polyfill.js";
+
 import {initializeProxyHandler, loadProxySettings} from "./background_helpers/proxy_handler.js";
 import {allowAllgeofence, geofence, resetPolicyCookie} from "./background_helpers/geofence_handler.js";
 import {EXTENSION_RUNNING, getSyncValue, GLOBAL_STRICT_MODE, ISD_ALL, ISD_WHITELIST, PER_SITE_STRICT_MODE, saveSyncValue, type SyncValueSchema} from "./shared/storage.js";
