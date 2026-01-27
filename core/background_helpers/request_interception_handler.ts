@@ -18,7 +18,32 @@ type OnCommittedDetailsType = {
     timeStamp: number
     documentId?: string | undefined
 }
-type OnBeforeRequestDetails = WebRequest.OnBeforeRequestDetailsType;
+/**
+ * Custom type, as we need to support types for both Chromium-based and Firefox-based syntax and fields.
+ *
+ * Namely, the properties of interest are:
+ * - Chromium: documentId
+ * - Firefox: documentUrl
+ */
+type OnBeforeRequestDetails = {
+    requestId: string
+    url: string
+    method: string
+    frameId: number
+    parentFrameId: number
+    incognito?: boolean
+    cookieStoreId?: string
+    originUrl?: string
+    documentId?: string
+    documentUrl?: string
+    requestBody?: WebRequest.OnBeforeRequestDetailsTypeRequestBodyType
+    tabId: number
+    type: WebRequest.ResourceType
+    timeStamp: number
+    urlClassification?: WebRequest.UrlClassification
+    thirdParty: boolean
+    initiator?: string
+}
 type OnHeadersReceivedDetails = WebRequest.OnHeadersReceivedDetailsType;
 type OnAuthRequiredDetails = WebRequest.OnAuthRequiredDetailsType;
 type OnErrorOccurredDetails = WebRequest.OnErrorOccurredDetailsType;
@@ -124,12 +149,13 @@ function onCommitted(details: OnCommittedDetailsType) {
     // this logic here most likely ignores iframes...
     if (details.frameId !== 0) return;
 
+    const docId = isChromium() ? (details.documentId ?? null) : (details.url);
     withTabLock(details.tabId, async () => {
         const state = tabState.get(details.tabId) ?? {gen: 0, topOrigin: null, currentDocId: null};
         tabState.set(details.tabId, {
             ...state,
             topOrigin: safeOrigin(details.url),
-            currentDocId: details.documentId ?? null,
+            currentDocId: docId,
         });
     });
 }
@@ -142,6 +168,9 @@ function onCommitted(details: OnCommittedDetailsType) {
 function onBeforeRequest(details: OnBeforeRequestDetails): undefined {
     const tabId = details.tabId;
     if (tabId === browser.tabs.TAB_ID_NONE || tabId < 0) return;
+    // Note: Since `details.initiator` only exists in the chromium API, we use Firefox's `originUrl` as
+    // an alternative depending on the browser in use
+    const initiator = isChromium() ? details.initiator : details.originUrl;
 
     const hostname = safeProtocolFilteredHostname(details.url);
     if (!hostname) return;
@@ -170,13 +199,14 @@ function onBeforeRequest(details: OnBeforeRequestDetails): undefined {
         // If the case (was never the case in testing) should occur where onCommitted is invoked after a subresource
         // invokes onBeforeRequest, it is currently ignored. A future fix would be keep a buffer of non-matching requests.
         // Due to results from testing and simplicity (since this is purely for UI information), it was left out for now.
-        const docId = null; // TODO: firefox only supports documentUrl, which looks like it might be a replacement
+        // Note: Since chromium supports only documentId and firefox supports only documentUrl, we need to differentiate between browsers
+        const docId = isChromium() ? (details.documentId) : details.documentUrl;
         const currentDocId = state.currentDocId;
 
         // note that the two following if-statements are intentionally left empty for improved structure/documentation
         if (currentDocId && docId && docId === currentDocId) {
             // accept and handle request if the documentId matches the committed documentId stored in the state
-        } else if (currentDocId && !docId && state.topOrigin && details.initiator === state.topOrigin) {
+        } else if (currentDocId && !docId && state.topOrigin && initiator === state.topOrigin) {
             // fallback solution in case a request does not contain a documentId at all:
             // if the initiator matches the url that was present in the onCommitted call of the mainframe, that is
             // also accepted and handled
@@ -191,7 +221,7 @@ function onBeforeRequest(details: OnBeforeRequestDetails): undefined {
         const hostnameScionEnabled = requests.find((request) => request.domain === hostname)?.scionEnabled;
 
         // mainframe requests are already handled above and cannot reach this code, thus it is safe to assume that initiator exists
-        const initiatorHostname = safeHostname(details.initiator!);
+        const initiatorHostname = safeHostname(initiator!);
         if (initiatorHostname === null) {
             console.error("[onBeforeRequest]: Failed to extract hostname from initiator in: ", details);
             return;
@@ -327,4 +357,17 @@ async function handleAddDnrRule(hostname: string, scionEnabled: boolean, already
     if (GlobalStrictMode || strictHosts.includes(hostname)) {
         await addDnrRule(hostname, scionEnabled, alreadyHasLock);
     }
+}
+
+/**
+ * Returns whether the current environment is Chromium-based.
+ *
+ * This is evaluated by checking the extension URL which is of the form: `<browser>-extension://<extension-UUID>`
+ * where `<browser>` is:
+ * - `chrome` for Chromium-based browsers like Opera, Brave or Chrome
+ * - `moz` for Firefox
+ */
+function isChromium(): boolean {
+    const extensionUrl = browser.runtime.getURL("");
+    return extensionUrl.includes("chrome");
 }
