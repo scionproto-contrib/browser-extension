@@ -6,13 +6,9 @@ import {normalizedHostname, safeHostname} from "../shared/utilities.js";
 import {GlobalStrictMode, PerSiteStrictMode} from "../background.js";
 import type {WebNavigation, WebRequest} from "webextension-polyfill";
 
-type OnBeforeRequestDetails = WebRequest.OnBeforeRequestDetailsType;
-type OnHeadersReceivedDetails = WebRequest.OnHeadersReceivedDetailsType;
-// type OnCommittedDetailsType = WebNavigation.OnCommittedDetailsType;
-type OnAuthRequiredDetails = WebRequest.OnAuthRequiredDetailsType;
-type OnErrorOccurredDetails = WebRequest.OnErrorOccurredDetailsType;
-
-// TODO: verify that this works, as the polyfill type does not support documentId, but both firefox and chrome do...
+/**
+ * Custom type, as the equivalent provided by the `webextension-polyfill` does not contain a `documentId`, even though both Firefox and Chromium support it.
+ */
 type OnCommittedDetailsType = {
     tabId: number
     url: string
@@ -22,6 +18,10 @@ type OnCommittedDetailsType = {
     timeStamp: number
     documentId?: string | undefined
 }
+type OnBeforeRequestDetails = WebRequest.OnBeforeRequestDetailsType;
+type OnHeadersReceivedDetails = WebRequest.OnHeadersReceivedDetailsType;
+type OnAuthRequiredDetails = WebRequest.OnAuthRequiredDetailsType;
+type OnErrorOccurredDetails = WebRequest.OnErrorOccurredDetailsType;
 
 /**
  * General request interception concept:
@@ -94,7 +94,7 @@ function safeProtocolFilteredHostname(url: string | URL) {
     try {
         const u = new URL(url);
         // ignore internal or otherwise undesired requests
-        if (u.protocol === "chrome-extension:" || u.protocol === "chrome:" || u.protocol === "about:" || u.protocol === "data:" || u.protocol === "blob:") {
+        if (u.protocol === "chrome-extension:" || u.protocol === "moz-extension:" || u.protocol === "chrome:" || u.protocol === "about:" || u.protocol === "data:" || u.protocol === "blob:") {
             return null;
         }
         if (u.hostname) return u.hostname;
