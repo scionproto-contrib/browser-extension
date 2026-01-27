@@ -18,6 +18,7 @@
     "@types/chrome": "^0.1.32",
     "cpy-cli": "^6.0.0",
     "rimraf": "^6.1.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "webextension-polyfill": "^0.12.0"
   }
 }
