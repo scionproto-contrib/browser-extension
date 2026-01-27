@@ -4,10 +4,14 @@
   "description": "",
   "main": "background.js",
   "scripts": {
-    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "clean:chrome": "rimraf dist/chrome tsconfig.tsbuildinfo",
+    "clean:firefox": "rimraf dist/firefox tsconfig.tsbuildinfo",
+
+    "build:ts": "npm run build:ts:chrome && npm run build:ts:firefox",
     "build:ts:chrome": "tsc -p tsconfig.chrome.json --noEmitOnError",
     "build:ts:firefox": "tsc -p tsconfig.firefox.json --noEmitOnError",
-    "build:copyJs:chrome": "cpy \"./*.*\" \"!./manifest.*.json\" \"dist/chrome\" --cwd=. --dot",
+
+    "build:copyJs:chrome": "cpy \"./*.*\" \"!./*.ts\" \"!./manifest.*.json\" \"dist/chrome\" --cwd=. --dot",
     "build:copyJs:firefox": "cpy \"./*.*\" \"!./*.ts\" \"!./manifest.*.json\" \"dist/firefox\" --cwd=. --dot",
     "build:copyManifest:chrome": "cpy \"./manifest.chrome.json\" \"dist/chrome\" --flat --rename=manifest.json",
     "build:copyManifest:firefox": "cpy \"./manifest.firefox.json\" \"dist/firefox\" --flat --rename=manifest.json",
@@ -17,9 +21,15 @@
     "build:copyCss:firefox": "cpy \"./css\" \"dist/firefox\"",
     "build:copyPolyfill:chrome": "cpy \"./node_modules/webextension-polyfill/dist/browser-polyfill.js\" \"dist/chrome/vendor\" --flat",
     "build:copyPolyfill:firefox": "cpy \"./node_modules/webextension-polyfill/dist/browser-polyfill.js\" \"dist/firefox/vendor\" --flat",
+
+    "build:static": "npm run build:static:chrome && npm run build:static:firefox",
     "build:static:chrome": "npm run build:copyJs:chrome && npm run build:copyImages:chrome && npm run build:copyCss:chrome && npm run build:copyPolyfill:chrome && npm run build:copyManifest:chrome",
     "build:static:firefox": "npm run build:copyJs:firefox && npm run build:copyImages:firefox && npm run build:copyCss:firefox && npm run build:copyPolyfill:firefox && npm run build:copyManifest:firefox",
-    "build": "npm run clean && npm run build:ts:chrome && npm run build:ts:firefox && npm run build:static:chrome && npm run build:static:firefox",
+
+    "build": "npm run clean && npm run build:ts && npm run build:static",
+    "build:chrome": "npm run clean:chrome && npm run build:ts:chrome && npm run build:static:chrome",
+    "build:firefox": "npm run clean:firefox && npm run build:ts:firefox && npm run build:static:firefox",
+
     "watch": "tsc -w"
   },
   "keywords": [],

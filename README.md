@@ -21,17 +21,17 @@ Please refer to the [technical documentation](https://scion-browser-extension.re
     npm run build:css
     ```
    
-4. Install modules for TypeScript (run in the `chrome` folder):
+4. Install modules for TypeScript (run in the `core` folder):
     ```shell
     npm install
     ```
 
-5. To use the extension, run within the `chrome` folder:
+5. To use the extension, run within the `core` folder:
     ```shell
     npm run build
     ```
    
-    This will write the output into `chrome/dist` which is the folder that can be
+    This will write the output into `core/dist/<browser>` which is the folder that can be
     selected when loading the unpacked extension.
 
 ### Generate AS Name Map
