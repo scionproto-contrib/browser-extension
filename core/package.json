@@ -19,8 +19,8 @@
     "build:copyImages:firefox": "cpy \"./images\" \"dist/firefox\"",
     "build:copyCss:chrome": "cpy \"./css\" \"dist/chrome\"",
     "build:copyCss:firefox": "cpy \"./css\" \"dist/firefox\"",
-    "build:copyPolyfill:chrome": "cpy \"./node_modules/webextension-polyfill/dist/browser-polyfill.js\" \"dist/chrome/vendor\" --flat",
-    "build:copyPolyfill:firefox": "cpy \"./node_modules/webextension-polyfill/dist/browser-polyfill.js\" \"dist/firefox/vendor\" --flat",
+    "build:copyPolyfill:chrome": "cpy \"./node_modules/webextension-polyfill/dist\" \"dist/chrome/vendor\" --flat",
+    "build:copyPolyfill:firefox": "cpy \"./node_modules/webextension-polyfill/dist\" \"dist/firefox/vendor\" --flat",
 
     "build:static": "npm run build:static:chrome && npm run build:static:firefox",
     "build:static:chrome": "npm run build:copyJs:chrome && npm run build:copyImages:chrome && npm run build:copyCss:chrome && npm run build:copyPolyfill:chrome && npm run build:copyManifest:chrome",
