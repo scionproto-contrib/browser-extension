@@ -109,7 +109,16 @@ function withTabLock(tabId: number, fn: (() => Promise<void>)) {
 }
 
 // map that maps the tabId to a state (of type: { gen, topOrigin, currentDocumentId }
-const tabState = new Map();
+const GEN = "gen" as const;
+const TOP_ORIGIN = "topOrigin" as const;
+const CURRENT_DOCUMENT_ID = "currentDocumentId" as const;
+type State = {
+    [GEN]: number;
+    [TOP_ORIGIN]: string | null;
+    [CURRENT_DOCUMENT_ID]: string | null;
+}
+
+const tabState = new Map<number, State>();
 
 /**
  * Returns the hostname of the provided `url` in punycode format.
@@ -151,11 +160,11 @@ function onCommitted(details: OnCommittedDetailsType) {
 
     const docId = isChromium() ? (details.documentId ?? null) : (details.url);
     withTabLock(details.tabId, async () => {
-        const state = tabState.get(details.tabId) ?? {gen: 0, topOrigin: null, currentDocId: null};
+        const state = tabState.get(details.tabId) ?? {[GEN]: 0, [TOP_ORIGIN]: null, [CURRENT_DOCUMENT_ID]: null};
         tabState.set(details.tabId, {
             ...state,
-            topOrigin: safeOrigin(details.url),
-            currentDocId: docId,
+            [TOP_ORIGIN]: safeOrigin(details.url),
+            [CURRENT_DOCUMENT_ID]: docId,
         });
     });
 }
@@ -176,12 +185,12 @@ function onBeforeRequest(details: OnBeforeRequestDetails): undefined {
     if (!hostname) return;
 
     withTabLock(tabId, async () => {
-        let state = tabState.get(tabId) ?? {gen: 0, topOrigin: null, currentDocId: null};
+        let state = tabState.get(tabId) ?? {[GEN]: 0, [TOP_ORIGIN]: null, [CURRENT_DOCUMENT_ID]: null};
 
         // if a mainframe is detected, immediately reset the tab resources (since a new page was opened in an existing tab,
         // thus previous information should be removed)
         if (details.type === "main_frame") {
-            state = {gen: state.gen + 1, topOrigin: safeOrigin(details.url), currentDocId: null};
+            state = {[GEN]: state[GEN] + 1, [TOP_ORIGIN]: safeOrigin(details.url), [CURRENT_DOCUMENT_ID]: null};
             tabState.set(tabId, state);
             // if global strict mode is on, clearing resources is handled by checking.html
             if (!GlobalStrictMode) await clearTabResources(tabId);
@@ -201,12 +210,12 @@ function onBeforeRequest(details: OnBeforeRequestDetails): undefined {
         // Due to results from testing and simplicity (since this is purely for UI information), it was left out for now.
         // Note: Since chromium supports only documentId and firefox supports only documentUrl, we need to differentiate between browsers
         const docId = isChromium() ? (details.documentId) : details.documentUrl;
-        const currentDocId = state.currentDocId;
+        const currentDocId = state[CURRENT_DOCUMENT_ID];
 
         // note that the two following if-statements are intentionally left empty for improved structure/documentation
         if (currentDocId && docId && docId === currentDocId) {
             // accept and handle request if the documentId matches the committed documentId stored in the state
-        } else if (currentDocId && !docId && state.topOrigin && initiator === state.topOrigin) {
+        } else if (currentDocId && !docId && state[TOP_ORIGIN] && initiator === state[TOP_ORIGIN]) {
             // fallback solution in case a request does not contain a documentId at all:
             // if the initiator matches the url that was present in the onCommitted call of the mainframe, that is
             // also accepted and handled
