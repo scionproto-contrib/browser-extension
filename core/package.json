@@ -4,6 +4,7 @@
   "description": "",
   "main": "background.js",
   "scripts": {
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
     "clean:chrome": "rimraf dist/chrome tsconfig.tsbuildinfo",
     "clean:firefox": "rimraf dist/firefox tsconfig.tsbuildinfo",
 
