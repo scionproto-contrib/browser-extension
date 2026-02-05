@@ -14,8 +14,8 @@ type ProxyPathUsageResponse = PerDomainPathUsage[];
 const DEFAULT_PROXY_SCHEME = HTTPS_PROXY_SCHEME;
 const DEFAULT_PROXY_PORT = HTTPS_PROXY_PORT;
 
-const toggleRunning = document.getElementById('toggleRunning') as HTMLInputElement;
-const checkboxRunning = document.getElementById('checkboxRunning') as HTMLDivElement;
+const togglePerSiteStrictModeCheckbox = document.getElementById('togglePerSiteStrictMode') as HTMLInputElement;
+const togglePerSiteStrictModeContainer = document.getElementById('togglePerSiteStrictModeContainer') as HTMLDivElement;
 const lineRunning = document.getElementById("lineRunning") as HTMLDivElement;
 const scionmode = document.getElementById("scionmode") as HTMLSpanElement;
 const mainDomain = document.getElementById("maindomain") as HTMLDivElement;
@@ -407,7 +407,7 @@ let proxyAddress = `${DEFAULT_PROXY_SCHEME}://${DEFAULT_PROXY_HOST}:${DEFAULT_PR
 let perSiteStrictMode: SyncValueSchema[typeof PER_SITE_STRICT_MODE] = {};
 let popupMainDomain = "";
 
-checkboxRunning.onclick = toggleExtensionRunning;
+togglePerSiteStrictModeContainer.onclick = togglePerSiteStrictMode;
 
 buttonOptionsButton.addEventListener('click', function () {
     browser.tabs.create({'url': 'chrome://extensions/?options=' + browser.runtime.id});
@@ -419,7 +419,7 @@ getSyncValue(PER_SITE_STRICT_MODE, {}).then((result) => {
 });
 
 document.addEventListener("DOMContentLoaded", () => {
-    toggleRunning.addEventListener("change", toggleExtensionRunning);
+    togglePerSiteStrictModeCheckbox.addEventListener("change", togglePerSiteStrictMode);
     getSyncValues({
         [PROXY_SCHEME]: DEFAULT_PROXY_SCHEME,
         [PROXY_HOST]: DEFAULT_PROXY_HOST,
@@ -631,14 +631,14 @@ function returnCountryCode(isd: number) {
 }
 
 // Start/Stop global forwarding
-function toggleExtensionRunning() {
-    toggleRunning.checked = !toggleRunning.checked;
+function togglePerSiteStrictMode() {
+    togglePerSiteStrictModeCheckbox.checked = !togglePerSiteStrictModeCheckbox.checked;
     const newPerSiteStrictMode = {
         ...perSiteStrictMode,
-        [popupMainDomain]: toggleRunning.checked,
+        [popupMainDomain]: togglePerSiteStrictModeCheckbox.checked,
     };
 
-    if (toggleRunning.checked) {
+    if (togglePerSiteStrictModeCheckbox.checked) {
         mainDomain.innerHTML = "SCION preference for " + popupMainDomain;
         lineRunning.style.backgroundColor = "#48bb78";
         scionmode.innerHTML = "Strict";
@@ -680,14 +680,14 @@ async function loadRequestInfo() {
 
     if (perSiteStrictMode[hostname]) {
         mainDomain.innerHTML = "SCION preference for " + hostname;
-        toggleRunning.checked = true; // true
-        toggleRunning.classList.remove("halfchecked");
+        togglePerSiteStrictModeCheckbox.checked = true; // true
+        togglePerSiteStrictModeCheckbox.classList.remove("halfchecked");
         lineRunning.style.backgroundColor = "#48bb78";
         scionmode.innerHTML = "Strict";
     } else if (mainDomainSCIONEnabled) {
         mainDomain.innerHTML = "SCION preference for " + hostname;
-        toggleRunning.checked = false; // true
-        toggleRunning.classList.add("halfchecked");
+        togglePerSiteStrictModeCheckbox.checked = false; // true
+        togglePerSiteStrictModeCheckbox.classList.add("halfchecked");
         lineRunning.style.backgroundColor = "#cccccc";
         scionmode.innerHTML = "When available";
     } else {

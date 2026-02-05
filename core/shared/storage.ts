@@ -5,7 +5,6 @@ export const GLOBAL_STRICT_MODE = "globalStrictMode" as const;
 export const PER_SITE_STRICT_MODE = "perSiteStrictMode" as const;
 export const ISD_WHITELIST = "isd_whitelist" as const;
 export const ISD_ALL = "isd_all" as const;
-export const EXTENSION_RUNNING = "extension_running" as const;
 export const AUTO_PROXY_CONFIG = "auto-proxy-config" as const;
 export const PROXY_SCHEME = "proxyScheme" as const;
 export const PROXY_HOST = "proxyHost" as const;
@@ -25,9 +24,6 @@ export type SyncValueSchema = {
     // ISDs
     [ISD_WHITELIST]: string[];
     [ISD_ALL]: boolean;
-
-    // misc.
-    [EXTENSION_RUNNING]: boolean;
 };
 // ========================
 
