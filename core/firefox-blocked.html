@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+    <title>SCION – Request blocked</title>
+
+    <link href="css/tailwind.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            background: #121212;
+        }
+
+        h1 {
+            font-size: xx-large;
+        }
+
+        .divider {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+    </style>
+
+</head>
+
+<body class="text-gray-100 m-0 p-8 flex flex-col items-center justify-center gap-4 font-sans text-center">
+
+    <h1>Request blocked</h1>
+
+    <div class="divider w-24"></div>
+
+    <p>
+        This website is not SCION-capable and was blocked
+        because <span class="font-semibold">strict mode</span> is enabled.
+    </p>
+
+    <p id="blocked-url"
+       class="font-mono break-all text-sm text-gray-400 max-w-full">
+    </p>
+
+    <script type="module" src="vendor/browser-polyfill.js"></script>
+    <script type="module" src="firefox-blocked.js"></script>
+</body>
+</html>

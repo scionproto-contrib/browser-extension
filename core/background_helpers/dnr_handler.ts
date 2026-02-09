@@ -42,6 +42,7 @@ const SUBRESOURCES_REDIRECT_RULE_ID = 3;
 const DOMAIN_SPECIFIC_RULES_START_ID = 10000;
 
 const CHECKING_PAGE = browser.runtime.getURL('/checking.html');
+const BLOCKED_PAGE = browser.runtime.getURL('/firefox-blocked.html')
 
 // extracting the hostname from the WPAD URL, as it needs to be excluded from matching rules
 // note that this might cause other resources that share the same hostname to be excluded too
@@ -196,15 +197,33 @@ export async function addDnrRule(host: string, scionEnabled: boolean, alreadyHas
 }
 
 function createBlockRule(host: string, id: number): Rule {
-    return {
+    // providing entirely different rules to chromium vs firefox, since they behave differently when a request is blocked by a DNR rule:
+    // - for main_frame requests, chromium displays an "ERR_BLOCKED_BY_CLIENT" page
+    // - for main_frame requests, firefox displays nothing and just leaves the url the user entered, in the address bar => seems like nothing was done
+    // therefore, firefox DNR rules redirect requests to a custom BLOCKED-page
+    return isChromium() ? {
         id: id,
         priority: 100,
         action: {type: 'block'},
         condition: {
             urlFilter: urlFilterFromHost(host),
-            resourceTypes: isChromium() ? CHROME_ALL_RESOURCE_TYPES : FIREFOX_ALL_RESOURCE_TYPES
+            resourceTypes: CHROME_ALL_RESOURCE_TYPES
         }
-    };
+    } : {
+        id: id,
+        priority: 100,
+        action: {
+            type: 'redirect',
+            redirect: {
+                // match entire URL and append it to a hash (separator character expected by firefox-blocked.js)
+                regexSubstitution: BLOCKED_PAGE + '#\\0',
+            },
+        },
+        condition: {
+            regexFilter: regexFilterFromHost(host),
+            resourceTypes: FIREFOX_ALL_RESOURCE_TYPES
+        }
+    }
 }
 
 function createAllowRule(host: string, id: number): Rule {
@@ -226,6 +245,13 @@ function urlFilterFromHost(host: string) {
     // in the simplified pattern matching syntax used by `urlFilter`, the '|' pipe denotes the start of the url, allowing for EXACT url matching,
     // something that the `requestDomains` property cannot do (e.g. `requestDomains: ["example.com"]` will also match requests to `a.example.com`)
     return `|http*://${host}/`;
+}
+
+/**
+ * Returns the string for the `regexFilter` parameter of a DNR rule.
+ */
+function regexFilterFromHost(host: string) {
+    return `^https?://${host}(/|$)`;
 }
 
 /**
