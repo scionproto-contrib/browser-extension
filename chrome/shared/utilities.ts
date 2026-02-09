@@ -3,7 +3,7 @@
  * @param hostname the `hostname` to be converted.
  * @returns {string} the normalized string representation of the `hostname` in punycode format.
  */
-export function normalizedHostname(hostname) {
+export function normalizedHostname(hostname: string): string {
     return new URL(`https://${hostname}`).hostname;
 }
 
@@ -11,7 +11,7 @@ export function normalizedHostname(hostname) {
  * Safely extracts the hostname in punycode format from the provided `url`.
  * If the extraction of the hostname fails, `null` is returned.
  */
-export function safeHostname(url) {
+export function safeHostname(url: string | URL): string | null {
     try {
         return url ? new URL(url).hostname : null;
     } catch {

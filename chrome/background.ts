@@ -3,29 +3,25 @@
 
 import {initializeProxyHandler, loadProxySettings} from "./background_helpers/proxy_handler.js";
 import {allowAllgeofence, geofence, resetPolicyCookie} from "./background_helpers/geofence_handler.js";
-import {EXTENSION_RUNNING, getSyncValue, GLOBAL_STRICT_MODE, PER_SITE_STRICT_MODE, saveSyncValue} from "./shared/storage.js";
-import {initializeDnr, globalStrictModeUpdated, perSiteStrictModeUpdated, updateProxySettingsInDnrRules} from "./background_helpers/dnr_handler.js";
+import {EXTENSION_RUNNING, getSyncValue, GLOBAL_STRICT_MODE, ISD_ALL, ISD_WHITELIST, PER_SITE_STRICT_MODE, saveSyncValue, type SyncValueSchema} from "./shared/storage.js";
+import {globalStrictModeUpdated, initializeDnr, perSiteStrictModeUpdated, updateProxySettingsInDnrRules} from "./background_helpers/dnr_handler.js";
 import {initializeRequestInterceptionListeners} from "./background_helpers/request_interception_handler.js";
 import {initializeTabListeners} from "./background_helpers/tab_handler.js";
 
-export let GlobalStrictMode = undefined;
-export let PerSiteStrictMode = undefined;
+export let GlobalStrictMode: SyncValueSchema[typeof GLOBAL_STRICT_MODE] = false;
+export let PerSiteStrictMode: SyncValueSchema[typeof PER_SITE_STRICT_MODE] = {};
 
 /*--- setup ------------------------------------------------------------------*/
 
 const initializeExtension = async () => {
-    GlobalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);
-    if (!GlobalStrictMode) {
-        GlobalStrictMode = false;
-        await saveSyncValue(GLOBAL_STRICT_MODE, GlobalStrictMode);
-    }
+    const storageGlobalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);
+    GlobalStrictMode = storageGlobalStrictMode ?? false;
+    if (storageGlobalStrictMode === undefined) await saveSyncValue(GLOBAL_STRICT_MODE, GlobalStrictMode);
     console.log(`[initializeExtension]: GlobalStrictMode: ${GlobalStrictMode}`);
 
-    PerSiteStrictMode = await getSyncValue(PER_SITE_STRICT_MODE);
-    if (!PerSiteStrictMode) {
-        PerSiteStrictMode = {};
-        await saveSyncValue(PER_SITE_STRICT_MODE, PerSiteStrictMode);
-    }
+    const storagePerSiteStrictMode = await getSyncValue(PER_SITE_STRICT_MODE);
+    PerSiteStrictMode = storagePerSiteStrictMode ?? {};
+    if (storagePerSiteStrictMode === undefined) await saveSyncValue(PER_SITE_STRICT_MODE, PerSiteStrictMode);
     console.log(`[initializeExtension]: PerSiteStrictMode: ${PerSiteStrictMode}`);
 
     /*--- PAC --------------------------------------------------------------------*/
@@ -33,7 +29,7 @@ const initializeExtension = async () => {
     await initializeProxyHandler()
     /*--- END PAC ----------------------------------------------------------------*/
 
-    await initializeDnr(GlobalStrictMode);
+    await initializeDnr();
 };
 initializeExtension();
 
@@ -52,27 +48,29 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
 
             await updateRunningIcon(changes.extension_running.newValue);
 
+        } else if (changes.isd_all?.newValue !== undefined) {
+
+            const isdAll = changes.isd_all.newValue as SyncValueSchema[typeof ISD_ALL];
+            allowAllgeofence(isdAll);
+
         } else if (changes.isd_whitelist?.newValue) {
 
-            geofence(changes.isd_whitelist.newValue);
+            const isdWhitelist = changes.isd_whitelist.newValue as SyncValueSchema[typeof ISD_WHITELIST];
+            geofence(isdWhitelist);
 
         } else if (changes.perSiteStrictMode?.newValue !== undefined) {
 
-            PerSiteStrictMode = changes.perSiteStrictMode.newValue || {};
+            PerSiteStrictMode = (changes.perSiteStrictMode.newValue || {}) as SyncValueSchema[typeof PER_SITE_STRICT_MODE];
 
             // update DNR rules
             await perSiteStrictModeUpdated();
 
         } else if (changes.globalStrictMode?.newValue !== undefined) {
 
-            GlobalStrictMode = changes.globalStrictMode.newValue;
+            GlobalStrictMode = changes.globalStrictMode.newValue as SyncValueSchema[typeof GLOBAL_STRICT_MODE];
 
             // update DNR rules
             await globalStrictModeUpdated();
-
-        } else if (changes.isd_all?.newValue !== undefined) {
-
-            allowAllgeofence(changes.isd_all.newValue);
 
         } else if (changes.proxyScheme || changes.proxyHost || changes.proxyPort) {
             // Reload all proxy settings if any changed
@@ -86,7 +84,7 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
 })
 
 // Changes icon depending on the extension is running or not
-async function updateRunningIcon(extensionRunning) {
+async function updateRunningIcon(extensionRunning: any) {
     if (extensionRunning) {
         await chrome.action.setIcon({path: "/images/scion-38.jpg"});
     } else {

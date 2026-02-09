@@ -1,9 +1,14 @@
 import {proxyAddress, proxyHostResolveParam, proxyHostResolvePath, proxyURLResolvePath} from "./proxy_handler.js";
 import {addDnrRule} from "./dnr_handler.js";
 import {policyCookie} from "./geofence_handler.js";
-import {addRequest, addTabResource, clearTabResources, getRequests} from "../shared/storage.js";
+import {addRequest, addTabResource, clearTabResources, DOMAIN, getRequests, MAIN_DOMAIN, SCION_ENABLED, type RequestSchema} from "../shared/storage.js";
 import {normalizedHostname, safeHostname} from "../shared/utilities.js";
 import {GlobalStrictMode, PerSiteStrictMode} from "../background.js";
+type WebNavigationTransitionCallbackDetails = chrome.webNavigation.WebNavigationTransitionCallbackDetails;
+type OnBeforeRequestDetails = chrome.webRequest.OnBeforeRequestDetails;
+type OnHeadersReceivedDetails = chrome.webRequest.OnHeadersReceivedDetails;
+type OnAuthRequiredDetails = chrome.webRequest.OnAuthRequiredDetails;
+type OnErrorOccurredDetails = chrome.webRequest.OnErrorOccurredDetails;
 
 /**
  * General request interception concept:
@@ -24,7 +29,7 @@ export function initializeRequestInterceptionListeners() {
     chrome.webNavigation.onCommitted.addListener(onCommitted);
 }
 
-export async function isHostScion(hostname, initiator, currentTabId, alreadyHasLock = false) {
+export async function isHostScion(hostname: string, initiator: string, currentTabId: number, alreadyHasLock = false) {
     let scionEnabled = false;
 
     const fetchUrl = `${proxyAddress}${proxyHostResolvePath}?${proxyHostResolveParam}=${hostname}`;
@@ -52,9 +57,9 @@ export async function isHostScion(hostname, initiator, currentTabId, alreadyHasL
 // map that maps tabId to promises (which act as locks)
 const perTabLocks = new Map();
 
-function withTabLock(tabId, fn) {
-    const prev = perTabLocks.get(tabId) ?? Promise.resolve();
-    const next = prev
+function withTabLock(tabId: number, fn: (() => Promise<void>)) {
+    const prev: Promise<void> = perTabLocks.get(tabId) ?? Promise.resolve();
+    const next: Promise<void> = prev
         .catch(() => {
         })
         .then(fn)
@@ -72,7 +77,7 @@ const tabState = new Map();
  * Returns the hostname of the provided `url` in punycode format.
  * Returns null if extraction fails or the `url` refers to an internal or otherwise undesired resource (e.g. starting with `chrome-extension:`).
  */
-function safeProtocolFilteredHostname(url) {
+function safeProtocolFilteredHostname(url: string | URL) {
     try {
         const u = new URL(url);
         // ignore internal or otherwise undesired requests
@@ -86,7 +91,7 @@ function safeProtocolFilteredHostname(url) {
     }
 }
 
-function safeOrigin(url) {
+function safeOrigin(url: string | URL) {
     try {
         return new URL(url).origin;
     } catch {
@@ -100,7 +105,7 @@ function safeOrigin(url) {
  * preventing delayed requests from the previous webpage displayed in the same tab to be counted as requests of the
  * current webpage (which would result in those old requests showing up in the popup).
  */
-function onCommitted(details) {
+function onCommitted(details: WebNavigationTransitionCallbackDetails) {
     if (details.tabId < 0) return;
 
     // this logic here most likely ignores iframes...
@@ -121,7 +126,7 @@ function onCommitted(details) {
  * - strict mode is off
  * - when strict mode is on and the host of the request is already known to the extension
  */
-function onBeforeRequest(details) {
+function onBeforeRequest(details: OnBeforeRequestDetails): undefined {
     const tabId = details.tabId;
     if (tabId === chrome.tabs.TAB_ID_NONE || tabId < 0) return;
 
@@ -172,9 +177,13 @@ function onBeforeRequest(details) {
         const requests = await getRequests();
         const hostnameScionEnabled = requests.find((request) => request.domain === hostname)?.scionEnabled;
 
-        const initiatorHostname = safeHostname(details.initiator);
+        // mainframe requests are already handled above and cannot reach this code, thus it is safe to assume that initiator exists
+        const initiatorHostname = safeHostname(details.initiator!);
+        if (initiatorHostname === null) {
+            console.error("[onBeforeRequest]: Failed to extract hostname from initiator in: ", details);
+            return;
+        }
 
-        // mainframe requests are already handled above and cannot reach this code, thus it is safe to assume that initiatorHostname exists
         if (GlobalStrictMode || PerSiteStrictMode[initiatorHostname]) {
             // if it has not been discovered previously, ignore it since the DNR redirect rule will catch it
             // in strict mode and then perform the lookup (or in case of perSiteStrictMode, the lookup is already
@@ -208,12 +217,12 @@ function onBeforeRequest(details) {
 /**
  * Handles and classifies responses received from requests to the proxy.
  */
-function onHeadersReceived(details) {
+function onHeadersReceived(details: OnHeadersReceivedDetails): undefined {
     if (details.url.startsWith(`${proxyAddress}${proxyURLResolvePath}`)) {
         const url = new URL(details.url);
         // the actual URL that we need is in ?url=$url
         const target = url.search.split("=")[1];
-        const targetHostname = safeHostname(target);
+        const targetHostname: string | null = safeHostname(target);
 
         if (targetHostname === null) {
             console.error(`[onHeadersReceived]: Failed to extract hostname from target url: ${target}`);
@@ -237,10 +246,11 @@ function onHeadersReceived(details) {
         });
 
         async function asyncHelper() {
-            const initiatorHostname = safeHostname(details.initiator);
+            const initiator = details.initiator;
+            const initiatorHostname = initiator ? safeHostname(initiator) : null;
             if (initiatorHostname === null) console.log("[onHeadersReceived]: Failed to extract hostname from initiator: ", details);
-            await handleAddDnrRule(targetHostname, scionEnabled, false);
-            await createRequestEntry(targetHostname, initiatorHostname ?? "", details.tabId, scionEnabled);
+            await handleAddDnrRule(targetHostname!, scionEnabled, false);
+            await createRequestEntry(targetHostname!, initiatorHostname ?? "", details.tabId, scionEnabled);
         }
     }
 }
@@ -250,7 +260,7 @@ function onHeadersReceived(details) {
 // the header has to contain the path policy cookie that is aquired by the first request
 // and updated on setPolicy requests as there is no other way to pass the path policy into the
 // Proxy for HTTPS requests (aka encrypted)
-function onAuthRequired(details) {
+function onAuthRequired(details: OnAuthRequiredDetails) {
     console.log("<onAuthRequired>", details);
     console.log("PolicyCookie: ", policyCookie);
 
@@ -267,7 +277,7 @@ function onAuthRequired(details) {
     };
 }
 
-function onErrorOccurred(details) {
+function onErrorOccurred(details: OnErrorOccurredDetails) {
     console.error("<onErrorOccurred>", details);
 }
 
@@ -276,17 +286,17 @@ function onErrorOccurred(details) {
  *
  * Note that both `hostname` and `initiator` must already be in punycode format (see {@link normalizedHostname}).
  */
-async function createRequestEntry(hostname, initiator, currentTabId, scionEnabled) {
-    const requestDBEntry = {
-        domain: hostname,
-        mainDomain: initiator,
-        scionEnabled: scionEnabled,
+async function createRequestEntry(hostname: string, initiator: string, currentTabId: number, scionEnabled: boolean) {
+    const requestDBEntry: RequestSchema = {
+        [DOMAIN]: hostname,
+        [MAIN_DOMAIN]: initiator,
+        [SCION_ENABLED]: scionEnabled,
     };
 
     await addRequest(requestDBEntry, {
-        mainDomain: requestDBEntry.mainDomain,
-        scionEnabled: requestDBEntry.scionEnabled,
-        domain: requestDBEntry.domain,
+        [DOMAIN]: requestDBEntry[DOMAIN],
+        [MAIN_DOMAIN]: requestDBEntry[MAIN_DOMAIN],
+        [SCION_ENABLED]: requestDBEntry[SCION_ENABLED],
     });
 
     if (currentTabId !== chrome.tabs.TAB_ID_NONE) await addTabResource(currentTabId, hostname, scionEnabled);
@@ -296,10 +306,10 @@ async function createRequestEntry(hostname, initiator, currentTabId, scionEnable
  * Checks whether `globalStrictMode` or `perSiteStrictMode` for the provided `hostname` are enabled and,
  * if either is true, adds the rule depending on whether `scionEnabled` for this host.
  */
-async function handleAddDnrRule(hostname, scionEnabled, alreadyHasLock) {
+async function handleAddDnrRule(hostname: string, scionEnabled: boolean, alreadyHasLock: boolean) {
     const strictHosts = Object.entries(PerSiteStrictMode)
-        .filter(([, isScion]) => isScion)
-        .map(([host]) => normalizedHostname(host));
+        .filter(([_, isScion]: [string, boolean]) => isScion)
+        .map(([host, _]: [string, boolean]) => normalizedHostname(host));
 
     if (GlobalStrictMode || strictHosts.includes(hostname)) {
         await addDnrRule(hostname, scionEnabled, alreadyHasLock);

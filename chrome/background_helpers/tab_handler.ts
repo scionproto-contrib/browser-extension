@@ -1,5 +1,6 @@
 import {clearAllTabResources, clearTabResources, getTabResources} from "../shared/storage.js";
 import {safeHostname} from "../shared/utilities.js";
+type Tab = chrome.tabs.Tab;
 
 export function initializeTabListeners() {
     // User switches between tabs
@@ -38,14 +39,15 @@ export function initializeTabListeners() {
 
 // Displays a green/blue SCION icon depending on the current url is
 // being forwarded via SCION
-export async function handleTabChange(tab) {
+export async function handleTabChange(tab: Tab) {
     if (!tab.active) return;
+
+    const resources: [string, boolean][] = tab.id !== undefined ? await getTabResources(tab.id) ?? [] : [];
     if (tab.url) {
-        const hostname = safeHostname(tab.url);
+        const hostname: string | null = safeHostname(tab.url);
 
         let mixedContent;
-        const resources = await getTabResources(tab.id) ?? [];
-        const mainDomainSCIONEnabled = resources.find(resource => resource[0] === hostname && resource[1]);
+        const mainDomainSCIONEnabled: [string, boolean] | undefined = resources.find(resource => resource[0] === hostname && resource[1]);
         for (const resource of resources) {
             if (!resource[1]) {
                 mixedContent = true;
@@ -69,9 +71,8 @@ export async function handleTabChange(tab) {
     // in case the tab object does not contain a URL, do a best-effort fallback by just setting the domain to 'not-available' if all resources are non-scion
     let allScion = true;
     let allNonScion = true;
-    const resources = await getTabResources(tab.id) ?? [];
     for (const resource of resources) {
-        const scionEnabled = resource[1];
+        const scionEnabled: boolean = resource[1];
 
         if (!scionEnabled) {
             allScion = false;

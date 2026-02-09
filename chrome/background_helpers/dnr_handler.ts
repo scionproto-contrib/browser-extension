@@ -1,8 +1,11 @@
-import {getRequests} from "../shared/storage.js";
+import {DOMAIN, getRequests, type RequestSchema} from "../shared/storage.js";
 import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD_URL} from "./proxy_handler.js";
 import {isHostScion} from "./request_interception_handler.js";
 import {normalizedHostname} from "../shared/utilities.js";
 import {GlobalStrictMode, PerSiteStrictMode} from "../background.js";
+import ResourceType = chrome.declarativeNetRequest.ResourceType;
+
+type Rule = chrome.declarativeNetRequest.Rule;
 
 /*
 General DNR (DeclarativeNetRequest) strategy:
@@ -43,8 +46,24 @@ const EXT_PAGE = chrome.runtime.getURL('/checking.html');
 // note that this might cause other resources that share the same hostname to be excluded too
 const WPAD_HOSTNAME = new URL(WPAD_URL).hostname;
 
-const ALL_RESOURCE_TYPES = ["main_frame", "sub_frame", "xmlhttprequest", "script", "image", "font", "media", "stylesheet", "object", "other", "ping", "websocket", "webtransport"];
-const MAIN_FRAME_TYPE = ["main_frame"];
+const MAIN_FRAME_TYPE: ResourceType[] = [ResourceType.MAIN_FRAME];
+const ALL_RESOURCE_TYPES = [
+    ResourceType.MAIN_FRAME,
+    ResourceType.SUB_FRAME,
+    ResourceType.XMLHTTPREQUEST,
+    ResourceType.SCRIPT,
+    ResourceType.IMAGE,
+    ResourceType.FONT,
+    ResourceType.MEDIA,
+    ResourceType.STYLESHEET,
+    ResourceType.OBJECT,
+    ResourceType.OTHER,
+    ResourceType.PING,
+    ResourceType.WEBSOCKET,
+    ResourceType.WEBTRANSPORT,
+    ResourceType.WEBBUNDLE,
+    ResourceType.CSP_REPORT,
+];
 
 /**
  * Initializes the DNR handler.
@@ -98,12 +117,12 @@ export async function perSiteStrictModeUpdated() {
     await withLock(async () => {
         const [allowedHostsWithId, blockedHostsWithId] = await getAllowedAndBlockedHostsWithId();
 
-        const strictHosts = Object.entries(PerSiteStrictMode)
+        const strictHosts: string[] = Object.entries(PerSiteStrictMode)
             .filter(([, isStrict]) => isStrict)
             .map(([host]) => normalizedHostname(host));
 
         // adding rules that block each of the hosts directly
-        let domainSpecificRules = [];
+        let domainSpecificRules: Rule[] = [];
         for (const strictHost of strictHosts) {
             // if the extension has info about the host, add the appropriate DNR rule, otherwise perform a lookup
             if (Object.keys(blockedHostsWithId).includes(strictHost)) domainSpecificRules.push(createBlockRule(strictHost, blockedHostsWithId[strictHost]));
@@ -118,7 +137,7 @@ export async function perSiteStrictModeUpdated() {
         // the individual rules above are insufficient, as a site marked as 'strict' can invoke other sub-resources that
         // should be blocked, but might have a different hostname and thus might not have a matching rule
         // thus, a redirect rule is needed that redirects all requests whose initiator is marked as 'strict'
-        let genericRules = [];
+        let genericRules: Rule[] = [];
         if (strictHosts.length > 0) {
             const subresourceInitiatorRule = createSubResourcesInitiatorRedirectRule(strictHosts);
             genericRules.push(subresourceInitiatorRule);
@@ -136,7 +155,7 @@ export async function updateProxySettingsInDnrRules() {
     const currentRules = await chrome.declarativeNetRequest.getDynamicRules();
     let hasSRR = false; // sub-resources redirect rule
     let hasSIRR = false; // sub-resources initiator redirect rule
-    let initiatorRuleBlockedInitiators = null;
+    let initiatorRuleBlockedInitiators: string[] = [];
     for (const rule of currentRules) {
         if (rule.id === SUBRESOURCES_REDIRECT_RULE_ID) {
             hasSRR = true;
@@ -144,7 +163,7 @@ export async function updateProxySettingsInDnrRules() {
             if (hasSIRR) break;
         }
         if (rule.id === SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID) {
-            initiatorRuleBlockedInitiators = rule.condition.initiatorDomains;
+            initiatorRuleBlockedInitiators = rule.condition.initiatorDomains!;
             hasSIRR = true;
 
             // both rules found, no need to search further
@@ -171,7 +190,7 @@ export async function updateProxySettingsInDnrRules() {
 /**
  * Based on `scionEnabled` creates a DNR allow or block rule for the `host`.
  */
-export async function addDnrRule(host, scionEnabled, alreadyHasLock) {
+export async function addDnrRule(host: string, scionEnabled: boolean, alreadyHasLock: boolean) {
     const run = async () => {
         const id = (await getNFreeIds(1))[0];
 
@@ -190,7 +209,7 @@ export async function addDnrRule(host, scionEnabled, alreadyHasLock) {
     await withLock(run);
 }
 
-function createBlockRule(host, id) {
+function createBlockRule(host: string, id: number): Rule {
     return {
         id: id,
         priority: 100,
@@ -202,7 +221,7 @@ function createBlockRule(host, id) {
     };
 }
 
-function createAllowRule(host, id) {
+function createAllowRule(host: string, id: number): Rule {
     return {
         id: id,
         priority: 101,
@@ -217,7 +236,7 @@ function createAllowRule(host, id) {
 /**
  * Returns the string for the `urlFilter` parameter of a DNR rule.
  */
-function urlFilterFromHost(host) {
+function urlFilterFromHost(host: string) {
     // in the simplified pattern matching syntax used by `urlFilter`, the '|' pipe denotes the start of the url, allowing for EXACT url matching,
     // something that the `requestDomains` property cannot do (e.g. `requestDomains: ["example.com"]` will also match requests to `a.example.com`)
     return `|http*://${host}/`;
@@ -226,7 +245,7 @@ function urlFilterFromHost(host) {
 /**
  * Returns a DNR rule that redirects all `main_frame` requests to the `checking.html` page for a synchronous blocking lookup.
  */
-function createMainFrameRedirectRule() {
+function createMainFrameRedirectRule(): Rule {
     return {
         id: MAIN_FRAME_REDIRECT_RULE_ID,
         priority: MAIN_FRAME_REDIRECT_RULE_ID,
@@ -247,7 +266,7 @@ function createMainFrameRedirectRule() {
 /**
  * Returns a DNR rule that redirects all sub-resources to the proxy `proxyURLResolvePath` endpoint.
  */
-function createSubResourcesRedirectRule() {
+function createSubResourcesRedirectRule(): Rule {
     return {
         id: SUBRESOURCES_REDIRECT_RULE_ID,
         priority: SUBRESOURCES_REDIRECT_RULE_ID,
@@ -273,7 +292,7 @@ function createSubResourcesRedirectRule() {
 /**
  * Returns a DNR rule that redirects all sub-resources whose initiator is in `blockedInitiators` to the `proxyURLResolvePath` endpoint.
  */
-function createSubResourcesInitiatorRedirectRule(blockedInitiators) {
+function createSubResourcesInitiatorRedirectRule(blockedInitiators: string[]): Rule {
     return {
         id: SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID,
         priority: SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID,
@@ -304,15 +323,15 @@ function createSubResourcesInitiatorRedirectRule(blockedInitiators) {
  * Note that this function is unsafe and must be wrapped with `withLock`.
  */
 async function getAllowedAndBlockedHostsWithId() {
-    const requests = await getRequests();
-    let allowedHostsWithId = {};
-    let blockedHostsWithId = {};
-    const freeIds = await getNFreeIds(requests.length);
+    const requests: RequestSchema[] = await getRequests();
+    let allowedHostsWithId: Record<string, number> = {};
+    let blockedHostsWithId: Record<string, number> = {};
+    const freeIds: number[] = await getNFreeIds(requests.length);
 
-    let i = 0;
+    let i: number = 0;
     for (const request of requests) {
-        if (request.scionEnabled) allowedHostsWithId[request.domain] = freeIds[i];
-        else blockedHostsWithId[request.domain] = freeIds[i];
+        if (request.scionEnabled) allowedHostsWithId[request[DOMAIN]] = freeIds[i];
+        else blockedHostsWithId[request[DOMAIN]] = freeIds[i];
         i++;
     }
 
@@ -324,8 +343,8 @@ async function getAllowedAndBlockedHostsWithId() {
  *
  * Note that this function is unsafe and must be wrapped with `withLock`.
  */
-async function getNFreeIds(n) {
-    const currentRules = await chrome.declarativeNetRequest.getDynamicRules();
+async function getNFreeIds(n: number): Promise<number[]> {
+    const currentRules: Rule[] = await chrome.declarativeNetRequest.getDynamicRules();
     const usedIds = new Set(currentRules.map(rule => rule.id));
     const idList = new Set(Array.from({length: n + usedIds.size}, (_, i) => i + DOMAIN_SPECIFIC_RULES_START_ID));
     return Array.from(idList.difference(usedIds));
@@ -338,7 +357,7 @@ async function getNFreeIds(n) {
  * @param targetGenericRules is an array of generic (custom defined) rules (such as `createMainFrameRedirectRule`) that should be active from this point onward.
  * @param targetDomainSpecificRules is an array of domain specific rules (created by `createBlockRule` and `createAllowRule`) that should be active from this point onward.
  */
-async function updateRules(targetGenericRules, targetDomainSpecificRules) {
+async function updateRules(targetGenericRules: Rule[], targetDomainSpecificRules: Rule[]) {
     const currentRules = await chrome.declarativeNetRequest.getDynamicRules();
     let currentGenericRules = [];
     let currentDomainSpecificRules = [];
@@ -365,7 +384,7 @@ async function updateRules(targetGenericRules, targetDomainSpecificRules) {
  */
 let idLock = Promise.resolve();
 
-function withLock(fn) {
+function withLock(fn: (() => Promise<void>)) {
     // chain the new work onto the previous one
     const p = idLock.then(fn, fn);
     // ensure errors don’t break the chain forever
