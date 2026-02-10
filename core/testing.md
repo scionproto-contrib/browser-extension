@@ -18,7 +18,7 @@ Any examples that are listed below reflect their SCION-capability at the time of
       the resources that were blocked (whose hosts are not SCION-capable)
     - Any sub-resources whose hosts are not SCION-capable of such websites (e.g. `www.googletagmanager.com`)
       should be blocked (in case of `ethz.ch`, this results in the Cookie-banner not being loaded)
-  - All websites that are not SCION-capable (e.g. `example.com`, `google.com`) should be blocked
+  - All websites that are not SCION-capable (e.g. `example.com`, `www.google.com`) should be blocked
     - The checking-page should indicate that the page was blocked
     - The popup should also indicate, that the host of the website was blocked
 - Browsing with per-site strict mode set for some page(s) with global strict mode enabled
@@ -51,11 +51,11 @@ requested by `www.googletagmanager.com` and therefore do not show up in strict m
   - Verify accessibility of:
     - `ethz.ch` (ensure the Cookie-banner is blocked)
     - `ovgu.de`
-- Per-site strict mode enabled for `ethz.ch` and `google.com` (with global strict mode enabled)
+- Per-site strict mode enabled for `ethz.ch` and `www.google.com` (with global strict mode enabled)
   - Verify same behaviour as if exclusively global strict mode was enabled
-- Per-site strict mode enabled for `ethz.ch` and `google.com` (with global strict mode disabled)
+- Per-site strict mode enabled for `ethz.ch` and `www.google.com` (with global strict mode disabled)
   - Verify blocking of:
-    - `google.com`
+    - `www.google.com`
   - Verify accessibility of:
     - `example.com`
     - `ovgu.de`
