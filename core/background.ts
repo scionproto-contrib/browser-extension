@@ -15,7 +15,20 @@ import {initializeTabListeners} from "./background_helpers/tab_handler.js";
 export let GlobalStrictMode: SyncValueSchema[typeof GLOBAL_STRICT_MODE] = false;
 export let PerSiteStrictMode: SyncValueSchema[typeof PER_SITE_STRICT_MODE] = {};
 
+/**
+ * A value indicating whether the current environment is Chromium-based.
+ *
+ * This is evaluated by checking the extension URL which is of the form: `<browser>-extension://<extension-UUID>`
+ * where `<browser>` is:
+ * - `chrome` for Chromium-based browsers like Opera, Brave or Chrome
+ * - `moz` for Firefox
+ */
+export let IsChromium: boolean;
+
 /*--- setup ------------------------------------------------------------------*/
+// Initialize IsChromium
+const extensionUrl = browser.runtime.getURL("");
+IsChromium =  extensionUrl.includes("chrome");
 
 const initializeExtension = async () => {
     const storageGlobalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);

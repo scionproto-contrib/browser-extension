@@ -2,8 +2,8 @@ import {proxyAddress, proxyHostResolveParam, proxyHostResolvePath, proxyURLResol
 import {addDnrRule} from "./dnr_handler.js";
 import {policyCookie} from "./geofence_handler.js";
 import {addRequest, addTabResource, clearTabResources, DOMAIN, getRequests, MAIN_DOMAIN, SCION_ENABLED, type RequestSchema} from "../shared/storage.js";
-import {isChromium, normalizedHostname, safeHostname} from "../shared/utilities.js";
-import {GlobalStrictMode, PerSiteStrictMode} from "../background.js";
+import {normalizedHostname, safeHostname} from "../shared/utilities.js";
+import {GlobalStrictMode, IsChromium, PerSiteStrictMode} from "../background.js";
 import type {WebNavigation, WebRequest} from "webextension-polyfill";
 
 /**
@@ -158,7 +158,7 @@ function onCommitted(details: OnCommittedDetailsType) {
     if (details.frameId !== 0) return;
 
     // documentId is chrome-only, for main-frame requests, only onCommitted's details contain the documentId
-    const docId = isChromium() ? (details.documentId ?? null) : null;
+    const docId = IsChromium ? (details.documentId ?? null) : null;
     withTabLock(details.tabId, async () => {
         tabState.set(details.tabId, {
             [REQUEST_ORIGIN]: safeOrigin(details.url),
@@ -177,7 +177,7 @@ function onBeforeRequest(details: OnBeforeRequestDetails): undefined {
     if (tabId === browser.tabs.TAB_ID_NONE || tabId < 0) return;
     // Note: Since `details.initiator` only exists in the chromium API, we use Firefox's `originUrl` as
     // an alternative depending on the browser in use
-    const initiator = isChromium() ? details.initiator : details.originUrl;
+    const initiator = IsChromium ? details.initiator : details.originUrl;
     const initiatorOrigin = initiator ? safeOrigin(initiator) : null;
 
     const hostname = safeProtocolFilteredHostname(details.url);
@@ -209,7 +209,7 @@ function onBeforeRequest(details: OnBeforeRequestDetails): undefined {
         // invokes onBeforeRequest, it is currently ignored. A future fix would be keep a buffer of non-matching requests.
         // Due to results from testing and simplicity (since this is purely for UI information), it was left out for now.
         // Note: Since chromium supports only documentId and firefox supports only documentUrl, we need to differentiate between browsers
-        if (isChromium()) {
+        if (IsChromium) {
             // ===== CHROMIUM =====
             const docId = details.documentId;
             const currentDocId = state[CHROME_DOCUMENT_ID];
@@ -313,7 +313,7 @@ function onHeadersReceived(details: OnHeadersReceivedDetails): undefined {
         });
 
         async function asyncHelper() {
-            const initiator = isChromium() ? details.initiator : details.originUrl;
+            const initiator = IsChromium ? details.initiator : details.originUrl;
             const initiatorHostname = initiator ? safeHostname(initiator) : null;
             if (initiatorHostname === null) console.log("[onHeadersReceived]: Failed to extract hostname from initiator: ", details);
             await handleAddDnrRule(targetHostname!, scionEnabled, false);

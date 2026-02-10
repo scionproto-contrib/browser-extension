@@ -1,8 +1,8 @@
 import {DOMAIN, getRequests, type RequestSchema} from "../shared/storage.js";
 import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD_URL} from "./proxy_handler.js";
 import {isHostScion} from "./request_interception_handler.js";
-import {isChromium, normalizedHostname} from "../shared/utilities.js";
-import {GlobalStrictMode, PerSiteStrictMode} from "../background.js";
+import {normalizedHostname} from "../shared/utilities.js";
+import {GlobalStrictMode, IsChromium, PerSiteStrictMode} from "../background.js";
 import type {DeclarativeNetRequest} from "webextension-polyfill";
 
 type ResourceType = DeclarativeNetRequest.ResourceType;
@@ -183,8 +183,11 @@ export async function addDnrRule(host: string, scionEnabled: boolean, alreadyHas
 
         // if a rule for the `host` already exists, do not add another rule
         const currentRules = await browser.declarativeNetRequest.getDynamicRules();
-        const currentUrlFilters = currentRules.map(rule => rule.condition.urlFilter);
-        if (currentUrlFilters.includes(urlFilterFromHost(host))) return;
+        const currentFilters = IsChromium
+            ? currentRules.map(rule => rule.condition.urlFilter)
+            : currentRules.map(rule => rule.condition.regexFilter);
+        const filterFromHost = IsChromium ? urlFilterFromHost(host) : regexFilterFromHost(host);
+        if (currentFilters.includes(filterFromHost)) return;
 
         const rule = scionEnabled ? createAllowRule(host, id) : createBlockRule(host, id);
         await browser.declarativeNetRequest.updateDynamicRules({addRules: [rule], removeRuleIds: []})
@@ -203,7 +206,7 @@ function createBlockRule(host: string, id: number): Rule {
     // therefore, firefox DNR rules redirect requests to a custom BLOCKED-page
     // NOTE: In the rare case that a requested subresource is of type HTML, the resulting behaviour is uncertain. Due to this uncertainty, the decision
     // was made to keep the default Chromium-behaviour which is guaranteed to work reliably block the resource even in such a case.
-    return isChromium() ? {
+    return IsChromium ? {
         id: id,
         priority: 100,
         action: {type: 'block'},
@@ -235,7 +238,7 @@ function createAllowRule(host: string, id: number): Rule {
         action: {type: 'allow'},
         condition: {
             urlFilter: urlFilterFromHost(host),
-            resourceTypes: isChromium() ? CHROME_ALL_RESOURCE_TYPES : FIREFOX_ALL_RESOURCE_TYPES
+            resourceTypes: IsChromium ? CHROME_ALL_RESOURCE_TYPES : FIREFOX_ALL_RESOURCE_TYPES
         }
     }
 }
@@ -383,10 +386,19 @@ async function updateRules(targetGenericRules: Rule[], targetDomainSpecificRules
     const genericRulesToAdd = targetGenericRules.filter(rule => !currentGenericRules.includes(rule));
     const genericRulesToRemove = currentGenericRules.filter(rule => !targetGenericRules.includes(rule));
 
-    const currentDsrHosts = currentDomainSpecificRules.map(rule => rule.condition.urlFilter);
-    const targetDsrHosts = targetDomainSpecificRules.map(rule => rule.condition.urlFilter);
-    const domainSpecificRulesToAdd = targetDomainSpecificRules.filter(rule => !currentDsrHosts.includes(rule.condition.urlFilter));
-    const domainSpecificRulesToRemove = currentDomainSpecificRules.filter(rule => !targetDsrHosts.includes(rule.condition.urlFilter));
+    let domainSpecificRulesToAdd: Rule[];
+    let domainSpecificRulesToRemove: Rule[];
+    if (IsChromium) {
+        const currentDsrHosts = currentDomainSpecificRules.map(rule => rule.condition.urlFilter);
+        const targetDsrHosts = targetDomainSpecificRules.map(rule => rule.condition.urlFilter);
+        domainSpecificRulesToAdd = targetDomainSpecificRules.filter(rule => !currentDsrHosts.includes(rule.condition.urlFilter));
+        domainSpecificRulesToRemove = currentDomainSpecificRules.filter(rule => !targetDsrHosts.includes(rule.condition.urlFilter));
+    } else {
+        const currentDsrHosts = currentDomainSpecificRules.map(rule => rule.condition.regexFilter);
+        const targetDsrHosts = targetDomainSpecificRules.map(rule => rule.condition.regexFilter);
+        domainSpecificRulesToAdd = targetDomainSpecificRules.filter(rule => !currentDsrHosts.includes(rule.condition.regexFilter));
+        domainSpecificRulesToRemove = currentDomainSpecificRules.filter(rule => !targetDsrHosts.includes(rule.condition.regexFilter));
+    }
 
     const rulesToAdd = genericRulesToAdd.concat(domainSpecificRulesToAdd);
     const rulesToRemoveIds = genericRulesToRemove.concat(domainSpecificRulesToRemove).map(rule => rule.id);
