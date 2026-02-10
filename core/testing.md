@@ -26,6 +26,8 @@ Any examples that are listed below reflect their SCION-capability at the time of
 - Browsing with per-site strict mode set for some page(s) with global strict mode disabled
   - All websites (except the ones set to strict) should be accessible
   - Those set to strict should behave the same way, as if global strict mode was set
+- Verify that the connection is performed via SCION by checking if `http://gazelle.scionapps.com`
+  shows a dancing gazelle
 
 ### Example Testing-workflow
 Important to note again, that these examples are based on the SCION-capability of those hosts at the
@@ -58,3 +60,4 @@ requested by `www.googletagmanager.com` and therefore do not show up in strict m
     - `example.com`
     - `ovgu.de`
     - `ethz.ch` (but ensure the Cookie-banner is blocked)
+- Verify SCION-usage by checking if `http://gazelle.scionapps.com` shows a dancing gazelle
