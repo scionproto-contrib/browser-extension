@@ -201,6 +201,8 @@ function createBlockRule(host: string, id: number): Rule {
     // - for main_frame requests, chromium displays an "ERR_BLOCKED_BY_CLIENT" page
     // - for main_frame requests, firefox displays nothing and just leaves the url the user entered, in the address bar => seems like nothing was done
     // therefore, firefox DNR rules redirect requests to a custom BLOCKED-page
+    // NOTE: In the rare case that a requested subresource is of type HTML, the resulting behaviour is uncertain. Due to this uncertainty, the decision
+    // was made to keep the default Chromium-behaviour which is guaranteed to work reliably block the resource even in such a case.
     return isChromium() ? {
         id: id,
         priority: 100,
