@@ -375,7 +375,7 @@ async function createRequestEntry(hostname: string, initiator: string, currentTa
  */
 async function handleAddDnrRule(hostname: string, scionEnabled: boolean, alreadyHasLock: boolean) {
     const strictHosts = Object.entries(PerSiteStrictMode)
-        .filter(([_, isScion]: [string, boolean]) => isScion)
+        .filter(([_, isEnabled]: [string, boolean]) => isEnabled)
         .map(([host, _]: [string, boolean]) => normalizedHostname(host));
 
     if (GlobalStrictMode || strictHosts.includes(hostname)) {
