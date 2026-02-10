@@ -116,8 +116,12 @@ export async function perSiteStrictModeUpdated() {
             else if (Object.keys(allowedHostsWithId).includes(strictHost)) domainSpecificRules.push(createAllowRule(strictHost, allowedHostsWithId[strictHost]));
             else {
                 // using chrome.tabs.TAB_ID_NONE as the tab id, as no tab can be associated with this request
-                // isHostScion already adds the appropriate DNR rules based on the lookup result (including creating the DB entry for the host)
-                await isHostScion(strictHost, strictHost, browser.tabs.TAB_ID_NONE, true);
+                // cannot use isHostScionHandleDnrRule here, since otherwise the call to updateRules below will remove the rule again, as it is not
+                // in the domainSpecificRules
+                const isScion = await isHostScion(strictHost, strictHost, browser.tabs.TAB_ID_NONE);
+                const id = (await getNFreeIds(1))[0];
+                if (isScion) domainSpecificRules.push(createAllowRule(strictHost, id))
+                else domainSpecificRules.push(createBlockRule(strictHost, id));
             }
         }
 
@@ -232,13 +236,23 @@ function createBlockRule(host: string, id: number): Rule {
 }
 
 function createAllowRule(host: string, id: number): Rule {
-    return {
+    return IsChromium ? {
         id: id,
         priority: 101,
         action: {type: 'allow'},
         condition: {
             urlFilter: urlFilterFromHost(host),
-            resourceTypes: IsChromium ? CHROME_ALL_RESOURCE_TYPES : FIREFOX_ALL_RESOURCE_TYPES
+            resourceTypes: CHROME_ALL_RESOURCE_TYPES
+        }
+    } : {
+        id: id,
+        priority: 101,
+        action: {type: 'allow'},
+        condition: {
+            // using regexFilter instead of urlFilter to consistently use the same (otherwise comparisons for
+            // existing rules become cumbersome)
+            regexFilter: regexFilterFromHost(host),
+            resourceTypes: FIREFOX_ALL_RESOURCE_TYPES
         }
     }
 }

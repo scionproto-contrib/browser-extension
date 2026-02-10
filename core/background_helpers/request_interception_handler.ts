@@ -67,7 +67,13 @@ export function initializeRequestInterceptionListeners() {
     browser.webNavigation.onCommitted.addListener(onCommitted);
 }
 
-export async function isHostScion(hostname: string, initiator: string, currentTabId: number, alreadyHasLock = false) {
+/**
+ * Verifies and returns whether the specified {@link hostname} is SCION-capable.
+ *
+ * Contrary to {@link isHostScionHandleDnrRule}, this function does not add any DNR rules, it does
+ * however create an entry in storage via {@link createRequestEntry}.
+ */
+export async function isHostScion(hostname: string, initiator: string, currentTabId: number) {
     let scionEnabled = false;
 
     const fetchUrl = `${proxyAddress}${proxyHostResolvePath}?${proxyHostResolveParam}=${hostname}`;
@@ -82,13 +88,22 @@ export async function isHostScion(hostname: string, initiator: string, currentTa
         if (scionEnabled) console.log("[DB]: scion enabled (after resolve): ", hostname);
         else console.log("[DB]: scion disabled (after resolve): ", hostname);
 
-        await handleAddDnrRule(hostname, scionEnabled, alreadyHasLock);
         await createRequestEntry(hostname, initiator, currentTabId, scionEnabled);
     } else {
         console.warn("[DB]: Resolution error: ", response.status);
     }
 
     console.log("[DB]: Resolution returned that host is scion-capable: ", scionEnabled);
+    return scionEnabled;
+}
+
+/**
+ * Verifies and returns whether the host is scion via {@link isHostScion}. Additionally, conditionally
+ * adds a DNR rule via {@link handleAddDnrRule}.
+ */
+export async function isHostScionHandleDnrRule(hostname: string, initiator: string, currentTabId: number, alreadyHasLock = false) {
+    const scionEnabled = await isHostScion(hostname, initiator, currentTabId);
+    await handleAddDnrRule(hostname, scionEnabled, alreadyHasLock);
     return scionEnabled;
 }
 
@@ -271,7 +286,7 @@ function onBeforeRequest(details: OnBeforeRequestDetails): undefined {
                 console.log(`[onBeforeRequest]: Strict mode disabled, host '${hostname}' is unknown, lookup is performed.`);
 
                 // perform a lookup for the host, if it has not been discovered previously and strict mode is off
-                await isHostScion(hostname, initiatorHostname ?? hostname, tabId);
+                await isHostScionHandleDnrRule(hostname, initiatorHostname ?? hostname, tabId);
                 return;
             }
 
