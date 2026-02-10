@@ -1,4 +1,4 @@
-import {proxyAddress, proxyHostResolveParam, proxyHostResolvePath, proxyURLResolvePath} from "./proxy_handler.js";
+import {DEFAULT_PROXY_HOST, proxyAddress, proxyHostResolveParam, proxyHostResolvePath, proxyURLResolvePath} from "./proxy_handler.js";
 import {addDnrRule} from "./dnr_handler.js";
 import {policyCookie} from "./geofence_handler.js";
 import {addRequest, addTabResource, clearTabResources, DOMAIN, getRequests, MAIN_DOMAIN, SCION_ENABLED, type RequestSchema} from "../shared/storage.js";
@@ -188,15 +188,16 @@ function onCommitted(details: OnCommittedDetailsType) {
  * - when strict mode is on and the host of the request is already known to the extension
  */
 function onBeforeRequest(details: OnBeforeRequestDetails): undefined {
+    const hostname = safeProtocolFilteredHostname(details.url);
+    if (!hostname || hostname.includes(DEFAULT_PROXY_HOST)) return;
+
     const tabId = details.tabId;
     if (tabId === browser.tabs.TAB_ID_NONE || tabId < 0) return;
+
     // Note: Since `details.initiator` only exists in the chromium API, we use Firefox's `originUrl` as
     // an alternative depending on the browser in use
     const initiator = IsChromium ? details.initiator : details.originUrl;
     const initiatorOrigin = initiator ? safeOrigin(initiator) : null;
-
-    const hostname = safeProtocolFilteredHostname(details.url);
-    if (!hostname) return;
 
     withTabLock(tabId, async () => {
         // if a mainframe is detected, immediately reset the tab resources (since a new page was opened in an existing tab,
