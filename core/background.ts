@@ -11,24 +11,14 @@ import {getSyncValue, GLOBAL_STRICT_MODE, ISD_ALL, ISD_WHITELIST, PER_SITE_STRIC
 import {globalStrictModeUpdated, initializeDnr, perSiteStrictModeUpdated, updateProxySettingsInDnrRules} from "./background_helpers/dnr_handler.js";
 import {initializeRequestInterceptionListeners} from "./background_helpers/request_interception_handler.js";
 import {initializeTabListeners} from "./background_helpers/tab_handler.js";
+import {initializeIsChromium} from "./shared/utilities.js";
 
 export let GlobalStrictMode: SyncValueSchema[typeof GLOBAL_STRICT_MODE] = false;
 export let PerSiteStrictMode: SyncValueSchema[typeof PER_SITE_STRICT_MODE] = {};
 
-/**
- * A value indicating whether the current environment is Chromium-based.
- *
- * This is evaluated by checking the extension URL which is of the form: `<browser>-extension://<extension-UUID>`
- * where `<browser>` is:
- * - `chrome` for Chromium-based browsers like Opera, Brave or Chrome
- * - `moz` for Firefox
- */
-export let IsChromium: boolean;
-
 /*--- setup ------------------------------------------------------------------*/
 // Initialize IsChromium
-const extensionUrl = browser.runtime.getURL("");
-IsChromium =  extensionUrl.includes("chrome");
+initializeIsChromium();
 
 const initializeExtension = async () => {
     const storageGlobalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);

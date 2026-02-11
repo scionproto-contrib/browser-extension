@@ -1,9 +1,12 @@
-import {safeHostname} from "./shared/utilities.js";
+import {initializeIsChromium, safeHostname} from "./shared/utilities.js";
 import {addTabResource} from "./shared/storage.js";
 
 const blockedUrlElement = document.getElementById("blocked-url") as HTMLParagraphElement;
 
 async function init() {
+    // initializing the value in the 'firefox-blocked'-context
+    initializeIsChromium();
+
     const originalUrl = location.hash.slice(1);
     if (originalUrl) {
         blockedUrlElement.textContent = originalUrl;

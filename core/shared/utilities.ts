@@ -18,3 +18,18 @@ export function safeHostname(url: string | URL): string | null {
         return null;
     }
 }
+
+/**
+ * A value indicating whether the current environment is Chromium-based.
+ *
+ * This is evaluated by checking the extension URL which is of the form: `<browser>-extension://<extension-UUID>`
+ * where `<browser>` is:
+ * - `chrome` for Chromium-based browsers like Opera, Brave or Chrome
+ * - `moz` for Firefox
+ */
+export let IsChromium: boolean;
+
+export function initializeIsChromium() {
+    const extensionUrl = browser.runtime.getURL("");
+    IsChromium =  extensionUrl.includes("chrome");
+}

@@ -1,6 +1,6 @@
 import {isHostScionHandleDnrRule} from "./background_helpers/request_interception_handler.js";
 import {clearTabResources} from "./shared/storage.js";
-import {safeHostname} from "./shared/utilities.js";
+import {initializeIsChromium, safeHostname} from "./shared/utilities.js";
 import {initializeProxyHandler} from "./background_helpers/proxy_handler.js";
 
 const titleElement = document.getElementById("title") as HTMLHeadingElement;
@@ -9,6 +9,8 @@ const statusElement = document.getElementById('status') as HTMLParagraphElement;
 const originalUrlElement = document.getElementById('original-url') as HTMLParagraphElement;
 
 async function init() {
+    // initializing the value in the 'checking'-context
+    initializeIsChromium();
     await initializeProxyHandler();
 
     statusElement.textContent = 'Determining the original page you tried to open...';

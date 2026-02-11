@@ -20,6 +20,10 @@ import {
     saveSyncValues
 } from "./shared/storage.js";
 import {DEFAULT_PROXY_HOST, HTTPS_PROXY_PORT, HTTPS_PROXY_SCHEME, type OnMessageMessageType} from "./background_helpers/proxy_handler.js";
+import {initializeIsChromium} from "./shared/utilities.js";
+
+// initializing the value in the 'options'-context
+initializeIsChromium();
 
 const DEFAULT_PROXY_SCHEME = HTTPS_PROXY_SCHEME;
 const DEFAULT_PROXY_PORT = HTTPS_PROXY_PORT;

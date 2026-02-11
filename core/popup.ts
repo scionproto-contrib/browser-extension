@@ -4,12 +4,15 @@
 
 import {getSyncValue, getSyncValues, getTabResources, PER_SITE_STRICT_MODE, PROXY_HOST, PROXY_PORT, PROXY_SCHEME, saveSyncValue, type SyncValueSchema} from "./shared/storage.js";
 import {DEFAULT_PROXY_HOST, HTTPS_PROXY_SCHEME, HTTPS_PROXY_PORT, proxyPathUsagePath, proxyHealthCheckPath} from "./background_helpers/proxy_handler.js";
-import {safeHostname} from "./shared/utilities.js";
+import {initializeIsChromium, safeHostname} from "./shared/utilities.js";
 import type {Tabs} from "webextension-polyfill";
 
 type Tab = Tabs.Tab;
 type PerDomainPathUsage = { Domain: string, Path: string[], Strategy: string };
 type ProxyPathUsageResponse = PerDomainPathUsage[];
+
+// initializing the value in the 'popup'-context
+initializeIsChromium();
 
 const DEFAULT_PROXY_SCHEME = HTTPS_PROXY_SCHEME;
 const DEFAULT_PROXY_PORT = HTTPS_PROXY_PORT;
