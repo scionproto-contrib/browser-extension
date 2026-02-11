@@ -1,5 +1,8 @@
 import {AUTO_PROXY_CONFIG, getSyncValue, getSyncValues, PROXY_HOST, PROXY_PORT, PROXY_SCHEME, saveSyncValues, type SyncValueSchema} from "../shared/storage.js";
+import {IsChromium} from "../shared/utilities.js";
+import type {Proxy} from "webextension-polyfill";
 
+type OnRequestDetailsType = Proxy.OnRequestDetailsType;
 export type OnMessageMessageType = {
     action: string;
 }
@@ -48,6 +51,11 @@ export async function initializeProxyHandler() {
             fetchAndApplyScionPAC();
         }
     });
+
+    // firefox-alternative to the string-ified pacScript of `updateProxyConfiguration`
+    if (!IsChromium) {
+        browser.proxy.onRequest.addListener(proxyOnRequest, {urls: ["<all_urls>"]});
+    }
 }
 
 export async function loadProxySettings() {
@@ -375,7 +383,8 @@ async function setProxyConfiguration(scheme: string, host: string, port: string)
     });
     console.log(`Using proxy configuration: ${proxyAddress}`);
 
-    await updateProxyConfiguration();
+    // only updating the proxy configuration via `pacScript` for chromium, firefox uses the `proxy.onRequest` listener
+    if (IsChromium) await updateProxyConfiguration();
 }
 
 
@@ -401,4 +410,38 @@ async function updateProxyConfiguration() {
 
     const proxyConfig = await browser.proxy.settings.get({});
     console.log(proxyConfig);
+}
+
+// ===============================
+// Proxy-listener functions only required by firefox
+// ===============================
+/**
+ * Custom implementation of behaviour described by https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_PAC_file#isplainhostname.
+ */
+function isPlainHostName(host: string): boolean {
+    return !host.includes(".");
+}
+
+/**
+ * Custom implementation of behaviour described by https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_PAC_file#dnsdomainis.
+ */
+function dnsDomainIs(host: string, domain: string): boolean {
+    return host === domain || host.endsWith("." + domain);
+}
+
+/**
+ * The object returned by this listener is defined by the `ProxyInfo` type.
+ * For proper type-information, see: https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/proxy/ProxyInfo
+ */
+function proxyOnRequest(details: OnRequestDetailsType) {
+    const url = new URL(details.url);
+    const host = url.hostname;
+
+    if (isPlainHostName(host) || dnsDomainIs(host, proxyHost)) return {type: "direct"};
+
+    return {
+        type: "https",
+        host: proxyHost,
+        port: proxyPort
+    };
 }
