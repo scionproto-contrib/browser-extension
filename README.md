@@ -34,6 +34,13 @@ Please refer to the [technical documentation](https://scion-browser-extension.re
     This will write the output into `core/dist/<browser>` which is the folder that can be
     selected when loading the unpacked extension.
 
+### Firefox-only settings
+For the extension to work properly, it must be allowed to change the proxy which requires
+the permission to run in private windows. This can be enabled as follows: 
+- enter `about:addons` in the address bar
+- selecting the `SCION Browser Extension`
+- switching `Run in Private Windows` to `Allow`
+
 ### Generate AS Name Map
 To generate the AS name map, run the following command:
 ```
