@@ -52,6 +52,9 @@
       "id": "@browser-extension.scionproto-contrib"
     }
   },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'"
+  },
   "omnibox": {
     "keyword": "scion"
   },
