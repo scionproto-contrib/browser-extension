@@ -7,9 +7,9 @@ You can find the source code on https://github.com/scionproto-contrib/browser-ex
 The SCION browser extension is part of a broader group of `SCION Applications <https://docs.scion.org/projects/scion-applications/en/latest>`_ .
 
 .. note::
-    The `latest version <https://github.com/scionproto-contrib/browser-extension/releases/tag/v0.3.0-beta>`_ of the extension  
-    contains a known limitation of 30000 DNR rules (equivalent of resolved hostnames under ``strict-mode``). 
-    Therefore, in case that limit is exceeded, ``strict-mode`` may no longer behave as intended. 
+    The `latest version <https://github.com/scionproto-contrib/browser-extension/releases/tag/v0.3.0-beta>`_ of the extension
+    contains a known limitation of 30000 DNR rules (equivalent of resolved hostnames under ``strict-mode``).
+    Therefore, in case that limit is exceeded, ``strict-mode`` may no longer behave as intended.
     In this case, it is advised to reinstall the extension.
     A future release will address this issue.
 
@@ -59,7 +59,7 @@ Subsequently, it will validate the SCION proxy configuration file and set the pr
 
 If the WPAD mechanism is not available in your network, the browser extension will fallback to the defaults settings, i.e., using a generic hostname for the SCION HTTP Forward Proxy.
 If within a search domain, the browser resolves the generic hostname accordingly.
-Firstly, the extension will try to connect using HTTPS, if this fails, it will try to connect using HTTP. 
+Firstly, the extension will try to connect using HTTPS, if this fails, it will try to connect using HTTP.
 For more information regarding the needed configuration, for instance, certificate import, please check the `SCION HTTP Forward Proxy configuration <https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html#configuration>`_ documentation.
 
 Finally, if none of this works, the user may manually configure the proxy settings in the browser, by navigating to `Extensions->Manage Extensions->Proxy settings`.
