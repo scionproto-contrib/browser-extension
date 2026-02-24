@@ -440,7 +440,7 @@ function proxyOnRequest(details: OnRequestDetailsType) {
     if (isPlainHostName(host) || dnsDomainIs(host, proxyHost)) return {type: "direct"};
 
     return {
-        type: "https",
+        type: proxyScheme,
         host: proxyHost,
         port: proxyPort
     };
