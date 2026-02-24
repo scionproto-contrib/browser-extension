@@ -2,8 +2,7 @@ import {DEFAULT_PROXY_HOST, proxyAddress, proxyHostResolveParam, proxyHostResolv
 import {addDnrRule} from "./dnr_handler.js";
 import {policyCookie} from "./geofence_handler.js";
 import {addRequest, addTabResource, clearTabResources, DOMAIN, getRequests, MAIN_DOMAIN, SCION_ENABLED, type RequestSchema} from "../shared/storage.js";
-import {IsChromium, normalizedHostname, safeHostname} from "../shared/utilities.js";
-import {GlobalStrictMode, PerSiteStrictMode} from "../background.js";
+import {GlobalStrictMode, PerSiteStrictMode, IsChromium, normalizedHostname, safeHostname} from "../shared/utilities.js";
 import type {WebNavigation, WebRequest} from "webextension-polyfill";
 
 /**

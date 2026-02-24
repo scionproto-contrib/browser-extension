@@ -37,13 +37,12 @@ export const WPAD_URL = `http://wpad/wpad_scion.dat`;
 
 export async function initializeProxyHandler() {
     // Load saved configuration at startup
-    getSyncValue(AUTO_PROXY_CONFIG, true).then((autoProxyConfig) => {
-        if (autoProxyConfig) {
-            fetchAndApplyScionPAC();
-        } else {
-            loadProxySettings();
-        }
-    });
+    const autoProxyConfig = await getSyncValue(AUTO_PROXY_CONFIG, true);
+    if (autoProxyConfig) {
+        await fetchAndApplyScionPAC();
+    } else {
+        await loadProxySettings();
+    }
 
     browser.runtime.onMessage.addListener(function (request: any) {
         const message = request as OnMessageMessageType;

@@ -1,3 +1,5 @@
+import {getSyncValue, GLOBAL_STRICT_MODE, PER_SITE_STRICT_MODE, saveSyncValue, type SyncValueSchema} from "./storage.js";
+
 /**
  * Normalizes the `hostname` to be in punycode format.
  * @param hostname the `hostname` to be converted.
@@ -32,4 +34,27 @@ export let IsChromium: boolean;
 export function initializeIsChromium() {
     const extensionUrl = browser.runtime.getURL("");
     IsChromium =  extensionUrl.includes("chrome");
+}
+
+export let GlobalStrictMode: SyncValueSchema[typeof GLOBAL_STRICT_MODE] = false;
+export let PerSiteStrictMode: SyncValueSchema[typeof PER_SITE_STRICT_MODE] = {};
+
+export async function initializeStrictModes() {
+    const storageGlobalStrictMode = await getSyncValue(GLOBAL_STRICT_MODE);
+    GlobalStrictMode = storageGlobalStrictMode ?? false;
+    if (storageGlobalStrictMode === undefined) await saveSyncValue(GLOBAL_STRICT_MODE, GlobalStrictMode);
+    console.log("[initializeStrictModes]: GlobalStrictMode:", GlobalStrictMode);
+
+    const storagePerSiteStrictMode = await getSyncValue(PER_SITE_STRICT_MODE);
+    PerSiteStrictMode = storagePerSiteStrictMode ?? {};
+    if (storagePerSiteStrictMode === undefined) await saveSyncValue(PER_SITE_STRICT_MODE, PerSiteStrictMode);
+    console.log("[initializeStrictModes]: PerSiteStrictMode:", PerSiteStrictMode);
+}
+
+export function setGlobalStrictMode(globalStrictMode: SyncValueSchema[typeof GLOBAL_STRICT_MODE]) {
+    GlobalStrictMode = globalStrictMode;
+}
+
+export function setPerSiteStrictMode(perSiteStrictMode: SyncValueSchema[typeof PER_SITE_STRICT_MODE]) {
+    PerSiteStrictMode = perSiteStrictMode;
 }

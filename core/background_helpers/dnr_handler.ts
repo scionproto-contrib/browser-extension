@@ -1,8 +1,7 @@
 import {DOMAIN, getRequests, type RequestSchema} from "../shared/storage.js";
 import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD_URL} from "./proxy_handler.js";
 import {isHostScion} from "./request_interception_handler.js";
-import {IsChromium, normalizedHostname} from "../shared/utilities.js";
-import {GlobalStrictMode, PerSiteStrictMode} from "../background.js";
+import {GlobalStrictMode, PerSiteStrictMode, IsChromium, normalizedHostname} from "../shared/utilities.js";
 import type {DeclarativeNetRequest} from "webextension-polyfill";
 
 type ResourceType = DeclarativeNetRequest.ResourceType;
