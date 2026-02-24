@@ -7,16 +7,11 @@ You can find the source code on https://github.com/scionproto-contrib/browser-ex
 The SCION browser extension is part of a broader group of `SCION Applications <https://docs.scion.org/projects/scion-applications/en/latest>`_ .
 
 .. note::
-    We are currently using Manifest V2 for the extension. 
-    We are aware that V2 is getting `deprecated <https://developer.chrome.com/docs/extensions/develop/migrate/mv2-deprecation-timeline>`_ in Chrome.  
-    However, the SCION-strict navigation would likely be impacted if we migrate to Manifest V3. 
-    Other chromium-based browsers, like Brave, are demonstrating some resistance to the Manifest V3 migration and `still support V2 <https://brave.com/blog/brave-shields-manifest-v3/>`_ by default.
-    On Chrome, one can also temporarily allow Manifest V2 https://chromeenterprise.google/policies/#ExtensionManifestV2Availability.
-
-.. note::
-    Nonetheless, we consider migrating to Manifest V3 in the future and/or support Firefox.
-
-If you have any questions or need help, please `contact us <https://docs.scion.org/projects/scion-applications/en/latest/#contact-us>`_.
+    The `latest version <https://github.com/scionproto-contrib/browser-extension/releases/tag/v0.3.0-beta>`_ of the extension  
+    contains a known limitation of 30000 DNR rules (equivalent of resolved hostnames under ``strict-mode``). 
+    Therefore, in case that limit is exceeded, ``strict-mode`` may no longer behave as intended. 
+    In this case, it is advised to reinstall the extension.
+    A future release will address this issue.
 
 
 Requirements
@@ -31,10 +26,8 @@ More information on the different SCION networks and how to access them can be f
 In-network Proxy mode
 ~~~~~~~~~~~~~~~~~~~~~
 
-If your network domain offers an in-network proxy, double check with your network administrator to connect to it. 
-
-.. note::
-    At the moment, it is likely that you need some manual configuration. We are working on a more user-friendly solution that network operators can implement.
+If your network domain offers an in-network proxy, double check with your network administrator to connect to it.
+More details can be found in the `Proxy configuration`_ section.
 
 .. note::
     If your network is part of the `SCIERA ISD <https://sciera.readthedocs.io/en/latest/>`_, you can also try to `contact us <https://docs.scion.org/projects/scion-applications/en/latest/#contact-us>`_.
@@ -45,21 +38,17 @@ Self-hosted Proxy option
 
 If you rather prefer to run your own proxy, you can follow the instructions in the `documentation <https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html#running-the-scion-http-forward-proxy-locally>`__.
 Please note that for this configuration, you will need to follow the instructions to enable a SCION endhost stack on your machine. 
-The `documentation <https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html#prerequisites>`__ provides a detailed guide on how to set it up.
+The `prerequisites section <https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html#prerequisites>`__ provides a detailed guide on how to set it up.
 
 Installation
 ------------
 
 At the moment, we support only chromium based browsers (e.g. Chrome, Brave), other browsers will follow. 
-To install the browser extension, clone the `Github <https://github.com/scionproto-contrib/browser-extension>`_ repository or download and unzip the `latest release <https://github.com/scionproto-contrib/browser-extension/releases>`_.
+To install the browser extension, download and unzip the `latest release <https://github.com/scionproto-contrib/browser-extension/releases/tag/v0.3.0-beta>`_.
 
 Then navigate to `Extensions->Manage Extensions`. 
 On the upper right corner, enable `Developer Mode`. Then click the `Load unpacked` button and select the ``/chrome`` folder in the unzipped folder.
 
-
-.. note::
-    The error indicating that the manifest is deprecated does not impact the functionality at the moment, if you turn the extension on. 
-    If you are using Chrome or Chromium, you can temporarily allow Manifest V2 https://chromeenterprise.google/policies/#ExtensionManifestV2Availability.
 
 Proxy configuration
 -------------------
@@ -69,7 +58,10 @@ This mechanism is used to automatically detect the proxy settings in your networ
 Subsequently, it will validate the SCION proxy configuration file and set the proxy settings accordingly.
 
 If the WPAD mechanism is not available in your network, the browser extension will fallback to the defaults settings, i.e., using a generic hostname for the SCION HTTP Forward Proxy.
-Firstly, the extension will try to connect using HTTPS, if this fails, it will try to connect using HTTP. For more information regarding the needed configuration, for instance, certificate import, please check the `SCION HTTP Forward Proxy configuration <https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html#configuration>`_ documentation.
+If within a search domain, the browser resolves the generic hostname accordingly.
+Firstly, the extension will try to connect using HTTPS, if this fails, it will try to connect using HTTP. 
+For more information regarding the needed configuration, for instance, certificate import, please check the `SCION HTTP Forward Proxy configuration <https://scion-http-proxy.readthedocs.io/en/latest/forward-proxy.html#configuration>`_ documentation.
+
 Finally, if none of this works, the user may manually configure the proxy settings in the browser, by navigating to `Extensions->Manage Extensions->Proxy settings`.
 
 Usage
