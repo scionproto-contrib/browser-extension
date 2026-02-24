@@ -8,7 +8,7 @@ The SCION browser extension is part of a broader group of `SCION Applications <h
 
 .. note::
     The `latest version <https://github.com/scionproto-contrib/browser-extension/releases/tag/v0.3.0-beta>`_ of the extension  
-    contains a known limitation of 30000 DNR rules (equivalent at resolved hostnames under ``strict-mode``). 
+    contains a known limitation of 30000 DNR rules (equivalent of resolved hostnames under ``strict-mode``). 
     Therefore, in case that limit is exceeded, ``strict-mode`` may no longer behave as intended. 
     In this case, it is advised to reinstall the extension.
     A future release will address this issue.
