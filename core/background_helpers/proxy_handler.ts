@@ -134,14 +134,7 @@ async function fetchAndApplyScionPAC() {
             });
             console.log("Detected proxy configuration:", proxyAddress);
 
-            const config = {
-                mode: "pac_script",
-                pacScript: {
-                    data: pacScript
-                }
-            };
-
-            await browser.proxy.settings.set({value: config, scope: 'regular'});
+            await updateProxyConfiguration(pacScript);
 
             console.log("SCION PAC configuration from WPAD applied");
         } else {
@@ -182,11 +175,18 @@ async function fallbackToDefaults() {
     console.warn("All proxy connection attempts failed, using HTTPS default");
 }
 
+let useDirectProxy = false;
+
 async function setDirectProxy() {
-    await chrome.proxy.settings.set({
-        value: {mode: Mode.DIRECT},
-        scope: 'regular',
-    });
+    if (IsChromium) {
+        await browser.proxy.settings.set({
+            value: {mode: "direct"},
+            scope: 'regular',
+        });
+    } else {
+        useDirectProxy = true;
+    }
+
     console.log("Proxy temporarily set to direct for search domain discovery");
 }
 
@@ -383,23 +383,28 @@ async function setProxyConfiguration(scheme: string, host: string, port: string)
     console.log(`Using proxy configuration: ${proxyAddress}`);
 
     // only updating the proxy configuration via `pacScript` for chromium, firefox uses the `proxy.onRequest` listener
-    if (IsChromium) await updateProxyConfiguration();
+    await updateProxyConfiguration();
 }
 
+const defaultPACScript = "function FindProxyForURL(url, host) {\n" +
+    `    if (isPlainHostName(host) || dnsDomainIs(host, "${proxyHost}")) {\n` +
+    `        return "DIRECT"\n` +
+    `    } else {\n` +
+    `       return '${proxyScheme === "https" ? "HTTPS" : "PROXY"} ${proxyHost}:${proxyPort}';\n` +
+    `    }\n` +
+    "}";
 
 // direct everything to the forward-proxy except if the target is the forward-proxy, then go direct
-async function updateProxyConfiguration() {
+async function updateProxyConfiguration(pacScript: string = defaultPACScript) {
+    if (!IsChromium) {
+        useDirectProxy = false;
+        return;
+    }
+
     const config = {
         mode: "pac_script",
         pacScript: {
-            data:
-                "function FindProxyForURL(url, host) {\n" +
-                `    if (isPlainHostName(host) || dnsDomainIs(host, "${proxyHost}")) {\n` +
-                `        return "DIRECT"\n` +
-                `    } else {\n` +
-                `       return '${proxyScheme === "https" ? "HTTPS" : "PROXY"} ${proxyHost}:${proxyPort}';\n` +
-                `    }\n` +
-                "}",
+            data: pacScript,
         }
     };
 
@@ -433,6 +438,8 @@ function dnsDomainIs(host: string, domain: string): boolean {
  * For proper type-information, see: https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/proxy/ProxyInfo
  */
 function proxyOnRequest(details: OnRequestDetailsType) {
+    if (useDirectProxy) return {type: "direct"};
+
     const url = new URL(details.url);
     const host = url.hostname;
 
