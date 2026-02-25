@@ -143,6 +143,10 @@ async function fetchAndApplyScionPAC() {
 }
 
 async function fallbackToDefaults() {
+    // Temporarily set proxy to direct so that search domain discovery requests
+    // go straight to Cloudflare rather than through a potentially stale proxy.
+    await setDirectProxy();
+
     const candidateDomains = await discoverSearchDomainCandidates();
 
     const candidateHosts = candidateDomains.map(domain => `${DEFAULT_PROXY_HOST}.${domain}`);
@@ -165,6 +169,14 @@ async function fallbackToDefaults() {
     // Nothing reachable, default to HTTPS with bare host
     await setProxyConfiguration(HTTPS_PROXY_SCHEME, DEFAULT_PROXY_HOST, HTTPS_PROXY_PORT);
     console.warn("All proxy connection attempts failed, using HTTPS default");
+}
+
+async function setDirectProxy() {
+    await chrome.proxy.settings.set({
+        value: {mode: Mode.DIRECT},
+        scope: 'regular',
+    });
+    console.log("Proxy temporarily set to direct for search domain discovery");
 }
 
 // Maximum number of domain suffix levels to try from the PTR-derived FQDN.
