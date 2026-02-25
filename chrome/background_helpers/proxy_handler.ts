@@ -143,22 +143,191 @@ async function fetchAndApplyScionPAC() {
 }
 
 async function fallbackToDefaults() {
-    const success = await tryProxyConnection(HTTPS_PROXY_SCHEME, HTTPS_PROXY_PORT);
-    if (success) {
-        await setProxyConfiguration(HTTPS_PROXY_SCHEME, DEFAULT_PROXY_HOST, HTTPS_PROXY_PORT);
-    } else {
-        const httpSuccess = await tryProxyConnection(HTTP_PROXY_SCHEME, HTTP_PROXY_PORT)
-        if (httpSuccess) {
-            await setProxyConfiguration(HTTP_PROXY_SCHEME, DEFAULT_PROXY_HOST, HTTP_PROXY_PORT);
-        } else {
-            await setProxyConfiguration(HTTPS_PROXY_SCHEME, DEFAULT_PROXY_HOST, HTTPS_PROXY_PORT);
-            console.warn("Both HTTPS and HTTP proxy connections failed, using HTTPS as default");
+    const candidateDomains = await discoverSearchDomainCandidates();
+
+    const candidateHosts = candidateDomains.map(domain => `${DEFAULT_PROXY_HOST}.${domain}`);
+    candidateHosts.push(DEFAULT_PROXY_HOST);
+
+    for (const host of candidateHosts) {
+        if (await tryProxyConnection(HTTPS_PROXY_SCHEME, HTTPS_PROXY_PORT, host)) {
+            await setProxyConfiguration(HTTPS_PROXY_SCHEME, host, HTTPS_PROXY_PORT);
+            return;
         }
+    }
+
+    for (const host of candidateHosts) {
+        if (await tryProxyConnection(HTTP_PROXY_SCHEME, HTTP_PROXY_PORT, host)) {
+            await setProxyConfiguration(HTTP_PROXY_SCHEME, host, HTTP_PROXY_PORT);
+            return;
+        }
+    }
+
+    // Nothing reachable, default to HTTPS with bare host
+    await setProxyConfiguration(HTTPS_PROXY_SCHEME, DEFAULT_PROXY_HOST, HTTPS_PROXY_PORT);
+    console.warn("All proxy connection attempts failed, using HTTPS default");
+}
+
+// Maximum number of domain suffix levels to try from the PTR-derived FQDN.
+// This bounds the number of proxy connection attempts to prevent abuse from
+// crafted/misconfigured PTR records with deeply nested labels.
+// Real-world search domains are rarely deeper than 3 labels (e.g., inf.ethz.ch).
+const MAX_SEARCH_DOMAIN_CANDIDATES = 3;
+
+/**
+ * Builds the PTR query name for reverse DNS lookup.
+ * Supports both IPv4 (in-addr.arpa) and IPv6 (ip6.arpa) addresses.
+ *
+ * Returns the PTR query string or null if the IP format is unrecognized.
+ */
+function buildPtrQuery(ip: string): string | null {
+    // IPv4: e.g., "203.0.113.1" → "1.113.0.203.in-addr.arpa."
+    const ipv4Match = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipv4Match) {
+        return `${ipv4Match[4]}.${ipv4Match[3]}.${ipv4Match[2]}.${ipv4Match[1]}.in-addr.arpa.`;
+    }
+
+    // IPv6: e.g., "2001:db8::1" → each nibble reversed, dot-separated, under ip6.arpa.
+    if (/^[0-9a-fA-F:]+$/.test(ip) && ip.includes(":")) {
+        const expanded = expandIPv6(ip);
+        if (!expanded) return null;
+        const nibbles = expanded.split("").reverse().join(".");
+        return `${nibbles}.ip6.arpa.`;
+    }
+
+    return null;
+}
+
+/**
+ * Expands an IPv6 address to its full 32-nibble hex representation (no colons).
+ * Handles :: shorthand expansion. Returns null if the format is invalid.
+ *
+ * Example: "2001:db8::1" → "20010db8000000000000000000000001"
+ */
+function expandIPv6(ip: string): string | null {
+    const halves = ip.split("::");
+    if (halves.length > 2) return null; // at most one "::" allowed
+
+    const expandGroup = (group: string): string[] =>
+        group === "" ? [] : group.split(":");
+
+    const left = expandGroup(halves[0]);
+    const right = halves.length === 2 ? expandGroup(halves[1]) : [];
+    const missingGroups = 8 - left.length - right.length;
+
+    if (halves.length === 2) {
+        if (missingGroups < 0) return null;
+    } else {
+        if (left.length !== 8) return null;
+    }
+
+    const allGroups = [
+        ...left,
+        ...Array(Math.max(0, missingGroups)).fill("0"),
+        ...right,
+    ];
+
+    if (allGroups.length !== 8) return null;
+
+    // Pad each group to 4 hex digits and validate
+    const padded = allGroups.map(g => {
+        if (g.length > 4 || !/^[0-9a-fA-F]+$/.test(g)) return null;
+        return g.padStart(4, "0");
+    });
+    if (padded.some(g => g === null)) return null;
+
+    return padded.join("").toLowerCase();
+}
+
+const CLOUDFLARE_IPV4 = "1.1.1.1";
+const CLOUDFLARE_IPV6 = "[2606:4700:4700::1111]";
+const CLOUDFLARE_TRACE_IPV4 = `https://${CLOUDFLARE_IPV4}/cdn-cgi/trace`;
+const CLOUDFLARE_TRACE_IPV6 = `https://${CLOUDFLARE_IPV6}/cdn-cgi/trace`;
+
+/**
+ * Fetches the client's public IP using Cloudflare's trace endpoint.
+ * Tries the IPv6 endpoint first, then falls back to IPv4.
+ *
+ * Returns the IP address and the reachable Cloudflare host, or null if both attempts fail.
+ */
+async function fetchPublicIp(): Promise<{ ip: string; cloudflareHost: string } | null> {
+    const endpoints = [
+        {url: CLOUDFLARE_TRACE_IPV6, host: CLOUDFLARE_IPV6},
+        {url: CLOUDFLARE_TRACE_IPV4, host: CLOUDFLARE_IPV4},
+    ];
+    for (const {url, host} of endpoints) {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) continue;
+            const text = await response.text();
+            const match = text.match(/^ip=(.+)$/m);
+            if (match) return {ip: match[1].trim(), cloudflareHost: host};
+        } catch {
+            // Connection failed try next
+        }
+    }
+    return null;
+}
+
+/**
+ * Discovers candidate search domains using Cloudflare's public APIs:
+ * 1. Fetches the client's public IP (IPv4 or IPv6) from Cloudflare's trace endpoint
+ * 2. Performs a reverse DNS (PTR) lookup via Cloudflare's DoH endpoint
+ * 3. Generates candidate search domains by progressively stripping labels from
+ *    the FQDN (most specific first), capped at {@link MAX_SEARCH_DOMAIN_CANDIDATES}
+ *
+ * Returns an empty array if discovery fails at any step.
+ */
+async function discoverSearchDomainCandidates(): Promise<string[]> {
+    try {
+        const result = await fetchPublicIp();
+        if (!result) {
+            console.warn("Search domain discovery: could not determine public IP");
+            return [];
+        }
+        const {ip, cloudflareHost} = result;
+
+        const ptrQuery = buildPtrQuery(ip);
+        if (!ptrQuery) {
+            console.warn(`Search domain discovery: unrecognized IP format (${ip}), skipping`);
+            return [];
+        }
+        const dohUrl = `https://${cloudflareHost}/dns-query?name=${encodeURIComponent(ptrQuery)}&type=PTR`;
+
+        const dohResponse = await fetch(dohUrl, {
+            headers: {"accept": "application/dns-json"},
+        });
+        if (!dohResponse.ok) {
+            console.warn("Search domain discovery: DoH PTR lookup failed");
+            return [];
+        }
+        const dohData = await dohResponse.json() as { Answer?: { data: string }[] };
+        if (!dohData.Answer || dohData.Answer.length === 0) {
+            console.warn("Search domain discovery: no PTR record found");
+            return [];
+        }
+
+        const fqdn = dohData.Answer[0].data.replace(/\.$/, "");
+        const labels = fqdn.split(".");
+        if (labels.length < 3) {
+            console.warn(`Search domain discovery: FQDN too short for search domain extraction (${fqdn})`);
+            return [];
+        }
+
+        const candidates: string[] = [];
+        for (let i = 1; i < labels.length - 1 && candidates.length < MAX_SEARCH_DOMAIN_CANDIDATES; i++) {
+            candidates.push(labels.slice(i).join("."));
+        }
+
+        console.log(`Search domain discovery: resolved ${ip} → ${fqdn}, candidates: [${candidates.join(", ")}]`);
+        return candidates;
+    } catch (error) {
+        console.warn("Search domain discovery failed:", error);
+        return [];
     }
 }
 
-async function tryProxyConnection(scheme: string, port: string) {
-    const testUrl = `${scheme}://${DEFAULT_PROXY_HOST}:${port}${proxyHealthCheckPath}`;
+async function tryProxyConnection(scheme: string, port: string, host: string = DEFAULT_PROXY_HOST) {
+    const testUrl = `${scheme}://${host}:${port}${proxyHealthCheckPath}`;
     console.log(`Testing proxy connection to ${testUrl}`);
 
     try {
