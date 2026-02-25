@@ -5,7 +5,6 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "rootDir": ".",
-    "outDir": "dist",
 
     "strict": true,
     "isolatedModules": true,
@@ -14,8 +13,7 @@
 
     "sourceMap": true,
     "declaration": true,
-    "declarationMap": true,
-    "types": ["chrome"]
+    "declarationMap": true
   },
-  "include": ["./**/*.ts"]
+  "include": ["./**/*.ts", "./global.d.ts"]
 }

@@ -1,11 +1,11 @@
 import {DOMAIN, getRequests, type RequestSchema} from "../shared/storage.js";
 import {proxyAddress, proxyHost, proxyURLResolveParam, proxyURLResolvePath, WPAD_URL} from "./proxy_handler.js";
 import {isHostScion} from "./request_interception_handler.js";
-import {normalizedHostname} from "../shared/utilities.js";
-import {GlobalStrictMode, PerSiteStrictMode} from "../background.js";
-import ResourceType = chrome.declarativeNetRequest.ResourceType;
+import {GlobalStrictMode, PerSiteStrictMode, IsChromium, normalizedHostname} from "../shared/utilities.js";
+import type {DeclarativeNetRequest} from "webextension-polyfill";
 
-type Rule = chrome.declarativeNetRequest.Rule;
+type ResourceType = DeclarativeNetRequest.ResourceType;
+type Rule = DeclarativeNetRequest.Rule;
 
 /*
 General DNR (DeclarativeNetRequest) strategy:
@@ -40,30 +40,16 @@ const SUBRESOURCES_REDIRECT_RULE_ID = 3;
 // sufficiently high to have space for generic DNR rules (specified above)
 const DOMAIN_SPECIFIC_RULES_START_ID = 10000;
 
-const EXT_PAGE = chrome.runtime.getURL('/checking.html');
+const CHECKING_PAGE = browser.runtime.getURL('/checking.html');
+const BLOCKED_PAGE = browser.runtime.getURL('/firefox-blocked.html')
 
 // extracting the hostname from the WPAD URL, as it needs to be excluded from matching rules
 // note that this might cause other resources that share the same hostname to be excluded too
 const WPAD_HOSTNAME = new URL(WPAD_URL).hostname;
 
-const MAIN_FRAME_TYPE: ResourceType[] = [ResourceType.MAIN_FRAME];
-const ALL_RESOURCE_TYPES = [
-    ResourceType.MAIN_FRAME,
-    ResourceType.SUB_FRAME,
-    ResourceType.XMLHTTPREQUEST,
-    ResourceType.SCRIPT,
-    ResourceType.IMAGE,
-    ResourceType.FONT,
-    ResourceType.MEDIA,
-    ResourceType.STYLESHEET,
-    ResourceType.OBJECT,
-    ResourceType.OTHER,
-    ResourceType.PING,
-    ResourceType.WEBSOCKET,
-    ResourceType.WEBTRANSPORT,
-    ResourceType.WEBBUNDLE,
-    ResourceType.CSP_REPORT,
-];
+const MAIN_FRAME_TYPE: ResourceType[] = ["main_frame"];
+const FIREFOX_ALL_RESOURCE_TYPES: ResourceType[] = ["main_frame", "sub_frame", "stylesheet", "script", "image", "object", "object_subrequest", "xmlhttprequest", "xslt", "ping", "beacon", "xml_dtd", "font", "media", "websocket", "csp_report", "imageset", "web_manifest", "speculative", "json", "other"];
+const CHROME_ALL_RESOURCE_TYPES: ResourceType[] = ["main_frame", "sub_frame", "xmlhttprequest", "script", "image", "font", "media", "stylesheet", "object", "other", "ping", "websocket", "csp_report"];
 
 /**
  * Initializes the DNR handler.
@@ -129,8 +115,12 @@ export async function perSiteStrictModeUpdated() {
             else if (Object.keys(allowedHostsWithId).includes(strictHost)) domainSpecificRules.push(createAllowRule(strictHost, allowedHostsWithId[strictHost]));
             else {
                 // using chrome.tabs.TAB_ID_NONE as the tab id, as no tab can be associated with this request
-                // isHostScion already adds the appropriate DNR rules based on the lookup result (including creating the DB entry for the host)
-                await isHostScion(strictHost, strictHost, chrome.tabs.TAB_ID_NONE, true);
+                // cannot use isHostScionHandleDnrRule here, since otherwise the call to updateRules below will remove the rule again, as it is not
+                // in the domainSpecificRules
+                const isScion = await isHostScion(strictHost, strictHost, browser.tabs.TAB_ID_NONE);
+                const id = (await getNFreeIds(1))[0];
+                if (isScion) domainSpecificRules.push(createAllowRule(strictHost, id))
+                else domainSpecificRules.push(createBlockRule(strictHost, id));
             }
         }
 
@@ -152,7 +142,7 @@ export async function perSiteStrictModeUpdated() {
  * the {@link proxyAddress} and therefore need to be updated.
  */
 export async function updateProxySettingsInDnrRules() {
-    const currentRules = await chrome.declarativeNetRequest.getDynamicRules();
+    const currentRules = await browser.declarativeNetRequest.getDynamicRules();
     let hasSRR = false; // sub-resources redirect rule
     let hasSIRR = false; // sub-resources initiator redirect rule
     let initiatorRuleBlockedInitiators: string[] = [];
@@ -184,7 +174,7 @@ export async function updateProxySettingsInDnrRules() {
         toRemoveIds.push(SUBRESOURCES_INITIATOR_REDIRECT_RULE_ID);
     }
 
-    await chrome.declarativeNetRequest.updateDynamicRules({addRules: toAdd, removeRuleIds: toRemoveIds});
+    await browser.declarativeNetRequest.updateDynamicRules({addRules: toAdd, removeRuleIds: toRemoveIds});
 }
 
 /**
@@ -195,12 +185,15 @@ export async function addDnrRule(host: string, scionEnabled: boolean, alreadyHas
         const id = (await getNFreeIds(1))[0];
 
         // if a rule for the `host` already exists, do not add another rule
-        const currentRules = await chrome.declarativeNetRequest.getDynamicRules();
-        const currentUrlFilters = currentRules.map(rule => rule.condition.urlFilter);
-        if (currentUrlFilters.includes(urlFilterFromHost(host))) return;
+        const currentRules = await browser.declarativeNetRequest.getDynamicRules();
+        const currentFilters = IsChromium
+            ? currentRules.map(rule => rule.condition.urlFilter)
+            : currentRules.map(rule => rule.condition.regexFilter);
+        const filterFromHost = IsChromium ? urlFilterFromHost(host) : regexFilterFromHost(host);
+        if (currentFilters.includes(filterFromHost)) return;
 
         const rule = scionEnabled ? createAllowRule(host, id) : createBlockRule(host, id);
-        await chrome.declarativeNetRequest.updateDynamicRules({addRules: [rule], removeRuleIds: []})
+        await browser.declarativeNetRequest.updateDynamicRules({addRules: [rule], removeRuleIds: []})
     };
     if (alreadyHasLock) {
         await run();
@@ -210,25 +203,55 @@ export async function addDnrRule(host: string, scionEnabled: boolean, alreadyHas
 }
 
 function createBlockRule(host: string, id: number): Rule {
-    return {
+    // providing entirely different rules to chromium vs firefox, since they behave differently when a request is blocked by a DNR rule:
+    // - for main_frame requests, chromium displays an "ERR_BLOCKED_BY_CLIENT" page
+    // - for main_frame requests, firefox displays nothing and just leaves the url the user entered, in the address bar => seems like nothing was done
+    // therefore, firefox DNR rules redirect requests to a custom BLOCKED-page
+    // NOTE: In the rare case that a requested subresource is of type HTML, the resulting behaviour is uncertain. Due to this uncertainty, the decision
+    // was made to keep the default Chromium-behaviour which is guaranteed to work reliably block the resource even in such a case.
+    return IsChromium ? {
         id: id,
         priority: 100,
         action: {type: 'block'},
         condition: {
             urlFilter: urlFilterFromHost(host),
-            resourceTypes: ALL_RESOURCE_TYPES
+            resourceTypes: CHROME_ALL_RESOURCE_TYPES
         }
-    };
+    } : {
+        id: id,
+        priority: 100,
+        action: {
+            type: 'redirect',
+            redirect: {
+                // match entire URL and append it to a hash (separator character expected by firefox-blocked.js)
+                regexSubstitution: BLOCKED_PAGE + '#\\0',
+            },
+        },
+        condition: {
+            regexFilter: regexFilterFromHost(host),
+            resourceTypes: FIREFOX_ALL_RESOURCE_TYPES
+        }
+    }
 }
 
 function createAllowRule(host: string, id: number): Rule {
-    return {
+    return IsChromium ? {
         id: id,
         priority: 101,
         action: {type: 'allow'},
         condition: {
             urlFilter: urlFilterFromHost(host),
-            resourceTypes: ALL_RESOURCE_TYPES
+            resourceTypes: CHROME_ALL_RESOURCE_TYPES
+        }
+    } : {
+        id: id,
+        priority: 101,
+        action: {type: 'allow'},
+        condition: {
+            // using regexFilter instead of urlFilter to consistently use the same (otherwise comparisons for
+            // existing rules become cumbersome)
+            regexFilter: regexFilterFromHost(host),
+            resourceTypes: FIREFOX_ALL_RESOURCE_TYPES
         }
     }
 }
@@ -243,6 +266,13 @@ function urlFilterFromHost(host: string) {
 }
 
 /**
+ * Returns the string for the `regexFilter` parameter of a DNR rule.
+ */
+function regexFilterFromHost(host: string) {
+    return `^https?://${host}(/|$)`;
+}
+
+/**
  * Returns a DNR rule that redirects all `main_frame` requests to the `checking.html` page for a synchronous blocking lookup.
  */
 function createMainFrameRedirectRule(): Rule {
@@ -253,7 +283,7 @@ function createMainFrameRedirectRule(): Rule {
             type: 'redirect',
             redirect: {
                 // match entire URL and append it to a hash (separator character expected by checking.js)
-                regexSubstitution: EXT_PAGE + '#\\0',
+                regexSubstitution: CHECKING_PAGE + '#\\0',
             },
         },
         condition: {
@@ -344,7 +374,7 @@ async function getAllowedAndBlockedHostsWithId() {
  * Note that this function is unsafe and must be wrapped with `withLock`.
  */
 async function getNFreeIds(n: number): Promise<number[]> {
-    const currentRules: Rule[] = await chrome.declarativeNetRequest.getDynamicRules();
+    const currentRules: Rule[] = await browser.declarativeNetRequest.getDynamicRules();
     const usedIds = new Set(currentRules.map(rule => rule.id));
     const idList = new Set(Array.from({length: n + usedIds.size}, (_, i) => i + DOMAIN_SPECIFIC_RULES_START_ID));
     return Array.from(idList.difference(usedIds));
@@ -358,7 +388,7 @@ async function getNFreeIds(n: number): Promise<number[]> {
  * @param targetDomainSpecificRules is an array of domain specific rules (created by `createBlockRule` and `createAllowRule`) that should be active from this point onward.
  */
 async function updateRules(targetGenericRules: Rule[], targetDomainSpecificRules: Rule[]) {
-    const currentRules = await chrome.declarativeNetRequest.getDynamicRules();
+    const currentRules = await browser.declarativeNetRequest.getDynamicRules();
     let currentGenericRules = [];
     let currentDomainSpecificRules = [];
     for (const currentRule of currentRules) {
@@ -369,14 +399,23 @@ async function updateRules(targetGenericRules: Rule[], targetDomainSpecificRules
     const genericRulesToAdd = targetGenericRules.filter(rule => !currentGenericRules.includes(rule));
     const genericRulesToRemove = currentGenericRules.filter(rule => !targetGenericRules.includes(rule));
 
-    const currentDsrHosts = currentDomainSpecificRules.map(rule => rule.condition.urlFilter);
-    const targetDsrHosts = targetDomainSpecificRules.map(rule => rule.condition.urlFilter);
-    const domainSpecificRulesToAdd = targetDomainSpecificRules.filter(rule => !currentDsrHosts.includes(rule.condition.urlFilter));
-    const domainSpecificRulesToRemove = currentDomainSpecificRules.filter(rule => !targetDsrHosts.includes(rule.condition.urlFilter));
+    let domainSpecificRulesToAdd: Rule[];
+    let domainSpecificRulesToRemove: Rule[];
+    if (IsChromium) {
+        const currentDsrHosts = currentDomainSpecificRules.map(rule => rule.condition.urlFilter);
+        const targetDsrHosts = targetDomainSpecificRules.map(rule => rule.condition.urlFilter);
+        domainSpecificRulesToAdd = targetDomainSpecificRules.filter(rule => !currentDsrHosts.includes(rule.condition.urlFilter));
+        domainSpecificRulesToRemove = currentDomainSpecificRules.filter(rule => !targetDsrHosts.includes(rule.condition.urlFilter));
+    } else {
+        const currentDsrHosts = currentDomainSpecificRules.map(rule => rule.condition.regexFilter);
+        const targetDsrHosts = targetDomainSpecificRules.map(rule => rule.condition.regexFilter);
+        domainSpecificRulesToAdd = targetDomainSpecificRules.filter(rule => !currentDsrHosts.includes(rule.condition.regexFilter));
+        domainSpecificRulesToRemove = currentDomainSpecificRules.filter(rule => !targetDsrHosts.includes(rule.condition.regexFilter));
+    }
 
     const rulesToAdd = genericRulesToAdd.concat(domainSpecificRulesToAdd);
     const rulesToRemoveIds = genericRulesToRemove.concat(domainSpecificRulesToRemove).map(rule => rule.id);
-    await chrome.declarativeNetRequest.updateDynamicRules({addRules: rulesToAdd, removeRuleIds: rulesToRemoveIds});
+    await browser.declarativeNetRequest.updateDynamicRules({addRules: rulesToAdd, removeRuleIds: rulesToRemoveIds});
 }
 
 /**

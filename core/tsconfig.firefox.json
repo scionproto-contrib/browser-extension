@@ -1,0 +1,7 @@
+// tsconfig.firefox.json
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist/firefox"
+  }
+}

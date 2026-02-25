@@ -4,17 +4,21 @@
 
 import {getSyncValue, getSyncValues, getTabResources, PER_SITE_STRICT_MODE, PROXY_HOST, PROXY_PORT, PROXY_SCHEME, saveSyncValue, type SyncValueSchema} from "./shared/storage.js";
 import {DEFAULT_PROXY_HOST, HTTPS_PROXY_SCHEME, HTTPS_PROXY_PORT, proxyPathUsagePath, proxyHealthCheckPath} from "./background_helpers/proxy_handler.js";
-import {safeHostname} from "./shared/utilities.js";
+import {initializeIsChromium, safeHostname} from "./shared/utilities.js";
+import type {Tabs} from "webextension-polyfill";
 
-type Tab = chrome.tabs.Tab;
+type Tab = Tabs.Tab;
 type PerDomainPathUsage = { Domain: string, Path: string[], Strategy: string };
 type ProxyPathUsageResponse = PerDomainPathUsage[];
+
+// initializing the value in the 'popup'-context
+initializeIsChromium();
 
 const DEFAULT_PROXY_SCHEME = HTTPS_PROXY_SCHEME;
 const DEFAULT_PROXY_PORT = HTTPS_PROXY_PORT;
 
-const toggleRunning = document.getElementById('toggleRunning') as HTMLInputElement;
-const checkboxRunning = document.getElementById('checkboxRunning') as HTMLDivElement;
+const togglePerSiteStrictModeCheckbox = document.getElementById('togglePerSiteStrictMode') as HTMLInputElement;
+const togglePerSiteStrictModeContainer = document.getElementById('togglePerSiteStrictModeContainer') as HTMLDivElement;
 const lineRunning = document.getElementById("lineRunning") as HTMLDivElement;
 const scionmode = document.getElementById("scionmode") as HTMLSpanElement;
 const mainDomain = document.getElementById("maindomain") as HTMLDivElement;
@@ -406,10 +410,10 @@ let proxyAddress = `${DEFAULT_PROXY_SCHEME}://${DEFAULT_PROXY_HOST}:${DEFAULT_PR
 let perSiteStrictMode: SyncValueSchema[typeof PER_SITE_STRICT_MODE] = {};
 let popupMainDomain = "";
 
-checkboxRunning.onclick = toggleExtensionRunning;
+togglePerSiteStrictModeContainer.onclick = togglePerSiteStrictMode;
 
 buttonOptionsButton.addEventListener('click', function () {
-    chrome.tabs.create({'url': 'chrome://extensions/?options=' + chrome.runtime.id});
+    browser.tabs.create({'url': 'chrome://extensions/?options=' + browser.runtime.id});
 });
 
 getSyncValue(PER_SITE_STRICT_MODE, {}).then((result) => {
@@ -418,6 +422,7 @@ getSyncValue(PER_SITE_STRICT_MODE, {}).then((result) => {
 });
 
 document.addEventListener("DOMContentLoaded", () => {
+    togglePerSiteStrictModeCheckbox.addEventListener("change", togglePerSiteStrictMode);
     getSyncValues({
         [PROXY_SCHEME]: DEFAULT_PROXY_SCHEME,
         [PROXY_HOST]: DEFAULT_PROXY_HOST,
@@ -508,11 +513,11 @@ function checkProxyStatus() {
 
 function showProxyHelpLink() {
     proxyHelpLink.classList.remove('hidden');
-    proxyHelpLink.href = chrome.runtime.getURL('proxy-help.html');
+    proxyHelpLink.href = browser.runtime.getURL('proxy-help.html');
 
     proxyHelpLink.addEventListener('click', function (event) {
         event.preventDefault();
-        chrome.tabs.create({url: this.href});
+        browser.tabs.create({url: this.href});
     });
 }
 
@@ -629,14 +634,14 @@ function returnCountryCode(isd: number) {
 }
 
 // Start/Stop global forwarding
-function toggleExtensionRunning() {
-    toggleRunning.checked = !toggleRunning.checked;
+function togglePerSiteStrictMode() {
+    togglePerSiteStrictModeCheckbox.checked = !togglePerSiteStrictModeCheckbox.checked;
     const newPerSiteStrictMode = {
         ...perSiteStrictMode,
-        [popupMainDomain]: toggleRunning.checked,
+        [popupMainDomain]: togglePerSiteStrictModeCheckbox.checked,
     };
 
-    if (toggleRunning.checked) {
+    if (togglePerSiteStrictModeCheckbox.checked) {
         mainDomain.innerHTML = "SCION preference for " + popupMainDomain;
         lineRunning.style.backgroundColor = "#48bb78";
         scionmode.innerHTML = "Strict";
@@ -653,7 +658,7 @@ function toggleExtensionRunning() {
 }
 
 async function loadRequestInfo() {
-    const tabs: Tab[] = await chrome.tabs.query({active: true, currentWindow: true});
+    const tabs: Tab[] = await browser.tabs.query({active: true, currentWindow: true});
     const activeTab: Tab = tabs[0];
     if (activeTab.url === undefined) {
         console.error("[Popup]: activeTab.url was undefined");
@@ -678,14 +683,14 @@ async function loadRequestInfo() {
 
     if (perSiteStrictMode[hostname]) {
         mainDomain.innerHTML = "SCION preference for " + hostname;
-        toggleRunning.checked = true; // true
-        toggleRunning.classList.remove("halfchecked");
+        togglePerSiteStrictModeCheckbox.checked = true; // true
+        togglePerSiteStrictModeCheckbox.classList.remove("halfchecked");
         lineRunning.style.backgroundColor = "#48bb78";
         scionmode.innerHTML = "Strict";
     } else if (mainDomainSCIONEnabled) {
         mainDomain.innerHTML = "SCION preference for " + hostname;
-        toggleRunning.checked = false; // true
-        toggleRunning.classList.add("halfchecked");
+        togglePerSiteStrictModeCheckbox.checked = false; // true
+        togglePerSiteStrictModeCheckbox.classList.add("halfchecked");
         lineRunning.style.backgroundColor = "#cccccc";
         scionmode.innerHTML = "When available";
     } else {

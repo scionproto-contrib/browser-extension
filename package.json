@@ -6,10 +6,10 @@
   "directories": {
     "doc": "docs"
   },
-"scripts": {
-  "build:css": "tailwindcss -i src/css/tailwind.css -o chrome/css/tailwind.min.css --minify",
-  "watch:css": "tailwindcss -i src/css/tailwind.css -o chrome/css/tailwind.min.css --watch"
-},
+  "scripts": {
+    "build:css": "tailwindcss -i src/css/tailwind.css -o core/css/tailwind.min.css --minify",
+    "watch:css": "tailwindcss -i src/css/tailwind.css -o core/css/tailwind.min.css --watch"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/scionproto-contrib/browser-extension.git"

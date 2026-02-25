@@ -1,6 +1,6 @@
-import {isHostScion} from "./background_helpers/request_interception_handler.js";
+import {isHostScionHandleDnrRule} from "./background_helpers/request_interception_handler.js";
 import {clearTabResources} from "./shared/storage.js";
-import {safeHostname} from "./shared/utilities.js";
+import {initializeIsChromium, initializeStrictModes, safeHostname} from "./shared/utilities.js";
 import {initializeProxyHandler} from "./background_helpers/proxy_handler.js";
 
 const titleElement = document.getElementById("title") as HTMLHeadingElement;
@@ -9,6 +9,9 @@ const statusElement = document.getElementById('status') as HTMLParagraphElement;
 const originalUrlElement = document.getElementById('original-url') as HTMLParagraphElement;
 
 async function init() {
+    // initializing the value in the 'checking'-context
+    initializeIsChromium();
+    await initializeStrictModes();
     await initializeProxyHandler();
 
     statusElement.textContent = 'Determining the original page you tried to open...';
@@ -40,13 +43,13 @@ async function init() {
     }
 
     // cannot be undefined, as the call is always made from a tab context
-    const currentTab = (await chrome.tabs.getCurrent())!;
+    const currentTab = (await browser.tabs.getCurrent())!;
     // since a main_frame request switches the entire page to checking.html, it should be safe to assume the list of resources
     // requested by this tab can be overwritten
     // clearing the resources must be done here, as onBeforeRequest only handles it in non-globalStrictMode, this is in order
     // not to clear tab resources added via the isHostScion call below
     if (currentTab.id && currentTab.id >= 0) await clearTabResources(currentTab.id);
-    const isScion = await isHostScion(host, host, currentTab.id !== undefined ? currentTab.id : chrome.tabs.TAB_ID_NONE);
+    const isScion = await isHostScionHandleDnrRule(host, host, currentTab.id !== undefined ? currentTab.id : browser.tabs.TAB_ID_NONE);
     if (!isScion) {
         statusElement.textContent = "This page is NOT SCION-capable and was blocked in strict mode.";
         checkFinished()

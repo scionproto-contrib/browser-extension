@@ -1,5 +1,11 @@
-import {getSyncValues, PROXY_HOST, PROXY_PORT, PROXY_SCHEME, saveSyncValues, type SyncValueSchema} from "../shared/storage.js";
-import Mode = chrome.proxy.Mode;
+import {AUTO_PROXY_CONFIG, getSyncValue, getSyncValues, PROXY_HOST, PROXY_PORT, PROXY_SCHEME, saveSyncValues, type SyncValueSchema} from "../shared/storage.js";
+import {IsChromium} from "../shared/utilities.js";
+import type {Proxy} from "webextension-polyfill";
+
+type OnRequestDetailsType = Proxy.OnRequestDetailsType;
+export type OnMessageMessageType = {
+    action: string;
+}
 
 type ProxyConfig = {
     [PROXY_SCHEME]: SyncValueSchema[typeof PROXY_SCHEME];
@@ -31,19 +37,24 @@ export const WPAD_URL = `http://wpad/wpad_scion.dat`;
 
 export async function initializeProxyHandler() {
     // Load saved configuration at startup
-    const {autoProxyConfig} = await chrome.storage.sync.get({autoProxyConfig: true});
+    const autoProxyConfig = await getSyncValue(AUTO_PROXY_CONFIG, true);
     if (autoProxyConfig) {
         await fetchAndApplyScionPAC();
     } else {
         await loadProxySettings();
     }
 
-    chrome.runtime.onMessage.addListener(async function (request, sender, sendResponse) {
-        if (request.action === "fetchAndApplyScionPAC") {
-            await fetchAndApplyScionPAC();
-            return true;
+    browser.runtime.onMessage.addListener(function (request: any) {
+        const message = request as OnMessageMessageType;
+        if (message.action === "fetchAndApplyScionPAC") {
+            fetchAndApplyScionPAC();
         }
     });
+
+    // firefox-alternative to the string-ified pacScript of `updateProxyConfiguration`
+    if (!IsChromium) {
+        browser.proxy.onRequest.addListener(proxyOnRequest, {urls: ["<all_urls>"]});
+    }
 }
 
 export async function loadProxySettings() {
@@ -123,14 +134,7 @@ async function fetchAndApplyScionPAC() {
             });
             console.log("Detected proxy configuration:", proxyAddress);
 
-            const config = {
-                mode: Mode.PAC_SCRIPT,
-                pacScript: {
-                    data: pacScript
-                }
-            };
-
-            await chrome.proxy.settings.set({value: config, scope: 'regular'});
+            await updateProxyConfiguration(pacScript);
 
             console.log("SCION PAC configuration from WPAD applied");
         } else {
@@ -171,11 +175,18 @@ async function fallbackToDefaults() {
     console.warn("All proxy connection attempts failed, using HTTPS default");
 }
 
+let useDirectProxy = false;
+
 async function setDirectProxy() {
-    await chrome.proxy.settings.set({
-        value: {mode: Mode.DIRECT},
-        scope: 'regular',
-    });
+    if (IsChromium) {
+        await browser.proxy.settings.set({
+            value: {mode: "direct"},
+            scope: 'regular',
+        });
+    } else {
+        useDirectProxy = true;
+    }
+
     console.log("Proxy temporarily set to direct for search domain discovery");
 }
 
@@ -371,30 +382,72 @@ async function setProxyConfiguration(scheme: string, host: string, port: string)
     });
     console.log(`Using proxy configuration: ${proxyAddress}`);
 
+    // only updating the proxy configuration via `pacScript` for chromium, firefox uses the `proxy.onRequest` listener
     await updateProxyConfiguration();
 }
 
+const defaultPACScript = "function FindProxyForURL(url, host) {\n" +
+    `    if (isPlainHostName(host) || dnsDomainIs(host, "${proxyHost}")) {\n` +
+    `        return "DIRECT"\n` +
+    `    } else {\n` +
+    `       return '${proxyScheme === "https" ? "HTTPS" : "PROXY"} ${proxyHost}:${proxyPort}';\n` +
+    `    }\n` +
+    "}";
 
 // direct everything to the forward-proxy except if the target is the forward-proxy, then go direct
-async function updateProxyConfiguration() {
+async function updateProxyConfiguration(pacScript: string = defaultPACScript) {
+    if (!IsChromium) {
+        useDirectProxy = false;
+        return;
+    }
+
     const config = {
-        mode: Mode.PAC_SCRIPT,
+        mode: "pac_script",
         pacScript: {
-            data:
-                "function FindProxyForURL(url, host) {\n" +
-                `    if (isPlainHostName(host) || dnsDomainIs(host, "${proxyHost}")) {\n` +
-                `        return "DIRECT"\n` +
-                `    } else {\n` +
-                `       return '${proxyScheme === "https" ? "HTTPS" : "PROXY"} ${proxyHost}:${proxyPort}';\n` +
-                `    }\n` +
-                "}",
+            data: pacScript,
         }
     };
 
-    await chrome.proxy.settings.set({value: config, scope: 'regular'});
+    await browser.proxy.settings.set({value: config, scope: 'regular'});
 
     console.log("Proxy configuration updated");
 
-    const proxyConfig = await chrome.proxy.settings.get({});
+    const proxyConfig = await browser.proxy.settings.get({});
     console.log(proxyConfig);
+}
+
+// ===============================
+// Proxy-listener functions only required by firefox
+// ===============================
+/**
+ * Custom implementation of behaviour described by https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_PAC_file#isplainhostname.
+ */
+function isPlainHostName(host: string): boolean {
+    return !host.includes(".");
+}
+
+/**
+ * Custom implementation of behaviour described by https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_PAC_file#dnsdomainis.
+ */
+function dnsDomainIs(host: string, domain: string): boolean {
+    return host === domain || host.endsWith("." + domain);
+}
+
+/**
+ * The object returned by this listener is defined by the `ProxyInfo` type.
+ * For proper type-information, see: https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/proxy/ProxyInfo
+ */
+function proxyOnRequest(details: OnRequestDetailsType) {
+    if (useDirectProxy) return {type: "direct"};
+
+    const url = new URL(details.url);
+    const host = url.hostname;
+
+    if (isPlainHostName(host) || dnsDomainIs(host, proxyHost)) return {type: "direct"};
+
+    return {
+        type: proxyScheme,
+        host: proxyHost,
+        port: proxyPort
+    };
 }

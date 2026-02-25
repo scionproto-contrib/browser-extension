@@ -21,18 +21,25 @@ Please refer to the [technical documentation](https://scion-browser-extension.re
     npm run build:css
     ```
    
-4. Install modules for TypeScript (run in the `chrome` folder):
+4. Install modules for TypeScript (run in the `core` folder):
     ```shell
     npm install
     ```
 
-5. To use the extension, run within the `chrome` folder:
+5. To use the extension, run within the `core` folder:
     ```shell
     npm run build
     ```
    
-    This will write the output into `chrome/dist` which is the folder that can be
+    This will write the output into `core/dist/<browser>` which is the folder that can be
     selected when loading the unpacked extension.
+
+### Firefox-only settings
+For the extension to work properly, it must be allowed to change the proxy which requires
+the permission to run in private windows. This can be enabled as follows: 
+- enter `about:addons` in the address bar
+- selecting the `SCION Browser Extension`
+- switching `Run in Private Windows` to `Allow`
 
 ### Generate AS Name Map
 To generate the AS name map, run the following command:
