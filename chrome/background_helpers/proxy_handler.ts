@@ -199,7 +199,7 @@ function buildPtrQuery(ip: string): string | null {
     }
 
     // IPv6: e.g., "2001:db8::1" → each nibble reversed, dot-separated, under ip6.arpa.
-    if (/^[0-9a-fA-F:]+$/.test(ip) && ip.includes(":")) {
+    if (/^[0-9a-fA-F:]+$/.test(ip) && (ip.match(/:/g) || []).length > 1) {
         const expanded = expandIPv6(ip);
         if (!expanded) return null;
         const nibbles = expanded.split("").reverse().join(".");
