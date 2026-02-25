@@ -320,13 +320,13 @@ async function discoverSearchDomainCandidates(): Promise<string[]> {
 
         const fqdn = dohData.Answer[0].data.replace(/\.$/, "");
         const labels = fqdn.split(".");
-        if (labels.length < 3) {
+        if (labels.length < 2) {
             console.warn(`Search domain discovery: FQDN too short for search domain extraction (${fqdn})`);
             return [];
         }
 
         const candidates: string[] = [];
-        for (let i = 1; i < labels.length - 1 && candidates.length < MAX_SEARCH_DOMAIN_CANDIDATES; i++) {
+        for (let i = 0; i < labels.length - 1 && candidates.length < MAX_SEARCH_DOMAIN_CANDIDATES; i++) {
             candidates.push(labels.slice(i).join("."));
         }
 
