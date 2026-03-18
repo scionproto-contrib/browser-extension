@@ -46,31 +46,14 @@ export async function getRequestsInDB(): Promise<RequestSchema[]> {
 
     const transaction = db.transaction(STORE_ENTRIES, "readonly");
     const store = transaction.objectStore(STORE_ENTRIES);
-    const req = store.openCursor();
-
-    const result: RequestSchema[] = [];
-
-    await new Promise<void>((resolve, reject) => {
-        req.onsuccess = () => {
-            const cursor = req.result;
-            if (!cursor) {
-                resolve();
-                return;
-            }
-
-            const entry = cursor.value as RequestEntryInternal;
-            result.push({
-                [DOMAIN]: entry.domain,
-                [MAIN_DOMAIN]: entry.mainDomain,
-                [SCION_ENABLED]: entry.scionEnabled,
-            });
-
-            cursor.continue();
-        };
-        req.onerror = () => reject(req.error);
+    const internalResult = await requestToPromise(store.getAll()) as RequestEntryInternal[];
+    return internalResult.map(internal => {
+        return {
+            [DOMAIN]: internal.domain,
+            [MAIN_DOMAIN]: internal.mainDomain,
+            [SCION_ENABLED]: internal.scionEnabled,
+        } as RequestSchema;
     });
-
-    return result;
 }
 
 /**
@@ -97,9 +80,6 @@ export async function addOrUpdateRequestInDB(entry: RequestSchema): Promise<void
     await requestToPromise(addOrUpdateRequest);
 
     const count = await getEntryCount(store);
-    // since MAX_ENTRIES already accounts for some buffer, concurrent changes to the DNR rules will
-    // with near certainty not exceed the DNR rule limit until rules are evicted, hence simply comparing
-    // count and not e.g. count+10 is sufficient
     if (count > MAX_ENTRIES) {
         await evictLRU(store, EVICT_COUNT);
     }

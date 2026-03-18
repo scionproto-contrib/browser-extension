@@ -6,7 +6,11 @@
   "scripts": {
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "build:ts": "tsc --noEmitOnError",
-    "build:static": "cpy \"./*.*\" \"dist\" --cwd=. --dot --ignore=**/*.ts && cpy \"./images\" \"dist\" && cpy \"./css\" \"dist\"",
+    "build:copyManifest": "cpy \"./manifest.json\" \"dist\"",
+    "build:copyHtmlExcludingDist": "cpy \"./**/*.html\" \"!./dist/**/*.html\" \"dist\" --cwd=.",
+    "build:copyImages": "cpy \"./images/**/*\" \"dist/images\" --ignore=dist/**",
+    "build:copyCss": "cpy \"./css/**/*\" \"dist/css\" --ignore=dist/**",
+    "build:static": "npm run build:copyManifest && npm run build:copyHtmlExcludingDist && npm run build:copyImages && npm run build:copyCss",
     "build": "npm run clean && npm run build:ts && npm run build:static",
     "watch": "tsc -w"
   },

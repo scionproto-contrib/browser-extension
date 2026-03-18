@@ -21,6 +21,27 @@ export function safeHostname(url: string | URL): string | null {
     }
 }
 
+/**
+ * Converts a given array into its `Set` representation.
+ * @typeParam T the type of item inside the array/set.
+ * @param array the array to be converted into a set.
+ */
+export function toSet<T>(array: T[]): Promise<Set<T>> {
+    return new Promise(resolve => {
+        resolve(new Set(array));
+    });
+}
+
+/**
+ * Removes all elements from the {@link list} that evaluate to a falsey value and returns the list again.
+ */
+export function removeEmptyEntries<T>(list: T[]): T[] {
+    if (!list) {
+        return list;
+    }
+    return list.filter((l: T) => !!l);
+}
+
 export let GlobalStrictMode: SyncValueSchema[typeof GLOBAL_STRICT_MODE] = false;
 export let PerSiteStrictMode: SyncValueSchema[typeof PER_SITE_STRICT_MODE] = {};
 
