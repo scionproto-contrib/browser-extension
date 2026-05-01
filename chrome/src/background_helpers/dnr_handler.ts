@@ -39,7 +39,7 @@ const SUBRESOURCES_REDIRECT_RULE_ID = 3;
 // sufficiently high to have space for generic DNR rules (specified above)
 const DOMAIN_SPECIFIC_RULES_START_ID = 10000;
 
-const CHECKING_PAGE = chrome.runtime.getURL('/checking.html');
+const CHECKING_PAGE = chrome.runtime.getURL('/src/checking/checking.html');
 
 const MAIN_FRAME_TYPE: ResourceType[] = [ResourceType.MAIN_FRAME];
 const ALL_RESOURCE_TYPES: ResourceType[] = [ResourceType.MAIN_FRAME, ResourceType.SUB_FRAME, ResourceType.XMLHTTPREQUEST, ResourceType.SCRIPT, ResourceType.IMAGE, ResourceType.FONT, ResourceType.MEDIA, ResourceType.STYLESHEET, ResourceType.OBJECT, ResourceType.OTHER, ResourceType.PING, ResourceType.WEBSOCKET, ResourceType.WEBTRANSPORT, ResourceType.WEBBUNDLE, ResourceType.CSP_REPORT];

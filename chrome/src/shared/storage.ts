@@ -134,8 +134,8 @@ export async function getSyncValue<K extends keyof SyncValueSchema>(key: K, fall
 
 export async function getSyncValue<K extends keyof SyncValueSchema>(key: K, fallback?: SyncValueSchema[K]): Promise<SyncValueSchema[K] | undefined> {
     const result = await chrome.storage.sync.get([key]);
-    if (result && result[key]) return result[key] as SyncValueSchema[K];
-    return fallback;
+    if (!result || result[key] === undefined || result[key] === null) return fallback;
+    return result[key] as SyncValueSchema[K];
 }
 
 export async function saveSyncValues<K extends keyof SyncValueSchema>(keyValuePairs: Partial<Record<K, SyncValueSchema[K]>>) {

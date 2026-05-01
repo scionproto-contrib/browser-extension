@@ -19,7 +19,7 @@
     "https://*/*"
   ],
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "/src/popup/popup.html",
     "default_title": "SCION Browser extension",
     "default_icon": {
       "16": "/images/scion-38.jpg",
@@ -38,11 +38,11 @@
     }
   ],
   "options_ui": {
-    "page": "options.html",
+    "page": "/src/options/options.html",
     "open_in_tab": true
   },
   "background": {
-    "service_worker": "background.js",
+    "service_worker": "/src/background.js",
     "type": "module"
   },
   "omnibox": {

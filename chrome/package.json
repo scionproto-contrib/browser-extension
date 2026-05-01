@@ -4,11 +4,14 @@
   "description": "",
   "main": "background.js",
   "scripts": {
-    "clean": "rimraf dist tsconfig.tsbuildinfo",
-    "build:ts": "tsc --noEmitOnError",
-    "build:static": "cpy \"./*.*\" \"dist\" --cwd=. --dot --ignore=**/*.ts && cpy \"./images\" \"dist\" && cpy \"./css\" \"dist\"",
-    "build": "npm run clean && npm run build:ts && npm run build:static",
-    "watch": "tsc -w"
+    "clean": "rimraf dist",
+    "build:js": "node build.mjs",
+    "build:copyManifest": "cpy \"./manifest.json\" \"dist\"",
+    "build:copyHtmlExcludingDist": "cpy \"./**/*.html\" \"!./dist/**/*.html\" \"dist\" --cwd=.",
+    "build:copyImages": "cpy \"./images/**/*\" \"dist/images\" --ignore=dist/**",
+    "build:copyCss": "cpy \"./css/**/*\" \"dist/css\" --ignore=dist/**",
+    "build:static": "npm run build:copyManifest && npm run build:copyHtmlExcludingDist && npm run build:copyImages && npm run build:copyCss",
+    "build": "npm run clean && npm run build:js && npm run build:static"
   },
   "keywords": [],
   "author": "",
@@ -16,7 +19,10 @@
   "type": "commonjs",
   "devDependencies": {
     "@types/chrome": "^0.1.32",
+    "@types/geojson": "^7946.0.16",
     "cpy-cli": "^6.0.0",
+    "esbuild": "^0.27.4",
+    "geojson-geometries-lookup": "^0.5.0",
     "rimraf": "^6.1.2",
     "typescript": "^5.9.3"
   }

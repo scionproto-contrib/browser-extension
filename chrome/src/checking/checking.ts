@@ -1,7 +1,7 @@
-import {isHostScionHandleDnrRule} from "./background_helpers/request_interception_handler.js";
-import {clearTabResources} from "./shared/storage.js";
-import {initializeStrictModes, safeHostname} from "./shared/utilities.js";
-import {loadProxySettingsNoUpdate} from "./background_helpers/proxy_handler.js";
+import {isHostScionHandleDnrRule} from "../background_helpers/request_interception_handler.js";
+import {clearTabResources} from "../shared/storage.js";
+import {initializeStrictModes, safeHostname} from "../shared/utilities.js";
+import {loadProxySettingsNoUpdate} from "../background_helpers/proxy_handler.js";
 
 const titleElement = document.getElementById("title") as HTMLHeadingElement;
 const spinnerElement = document.getElementById("spinner") as HTMLDivElement;

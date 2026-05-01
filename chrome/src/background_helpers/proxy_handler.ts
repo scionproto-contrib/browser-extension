@@ -3,16 +3,13 @@ import {GlobalStrictMode, PerSiteStrictMode} from "../shared/utilities.js";
 import {globalStrictModeUpdated, removeAllRules} from "./dnr_handler.js";
 import Mode = chrome.proxy.Mode;
 
-export type OnMessageMessageType = {
-    action: string;
-}
 type ProxyConfig = {
     [PROXY_SCHEME]: SyncValueSchema[typeof PROXY_SCHEME];
     [PROXY_HOST]: SyncValueSchema[typeof PROXY_HOST];
     [PROXY_PORT]: SyncValueSchema[typeof PROXY_PORT];
 } | null;
 
-const HTTP_PROXY_SCHEME = "http"
+export const HTTP_PROXY_SCHEME = "http"
 const HTTP_PROXY_PORT = "9080";
 export const HTTPS_PROXY_SCHEME = "https"
 export const HTTPS_PROXY_PORT = "9443";
@@ -45,13 +42,6 @@ export async function initializeProxyHandler() {
     } else {
         await loadProxySettings();
     }
-
-    chrome.runtime.onMessage.addListener(function (request: any) {
-        const message = request as OnMessageMessageType;
-        if (message.action === "fetchAndApplyScionPAC") {
-            fetchAndApplyScionPAC();
-        }
-    });
 }
 
 /**
@@ -82,45 +72,7 @@ export async function loadProxySettings() {
     await updateProxyConfiguration();
 }
 
-
-function parseProxyFromPAC(pacScript: string): ProxyConfig {
-    // We look for the first HTTPS definition, if not found, we look for the first HTTP definition.
-    const httpsProxyMatch = pacScript.match(/HTTPS\s+([^:]+):(\d+)/i);
-    const httpProxyMatch = pacScript.match(/PROXY\s+([^:]+):(\d+)/i);
-
-    if (httpsProxyMatch) {
-        if (!isValidPort(httpsProxyMatch[2])) {
-            console.warn("Invalid port number in PAC script");
-            return null;
-        }
-        return {
-            proxyScheme: HTTPS_PROXY_SCHEME,
-            proxyHost: httpsProxyMatch[1],
-            proxyPort: httpsProxyMatch[2]
-        };
-    } else if (httpProxyMatch) {
-        if (!isValidPort(httpProxyMatch[2])) {
-            console.warn("Invalid port number in PAC script");
-            return null;
-        }
-        return {
-            proxyScheme: HTTP_PROXY_SCHEME,
-            proxyHost: httpProxyMatch[1],
-            proxyPort: httpProxyMatch[2]
-        };
-    } else {
-        console.warn("No valid proxy configuration found in PAC script");
-    }
-
-    return null;
-}
-
-function isValidPort(port: string) {
-    const portNum = parseInt(port, 10);
-    return !isNaN(portNum) && portNum > 0 && portNum <= 65535;
-}
-
-async function fetchAndApplyScionPAC() {
+export async function fetchAndApplyScionPAC() {
     // temporarily removing all rules to allow all requests performed during proxy-search
     const anyRuleIsEnforced = GlobalStrictMode || Object.keys(PerSiteStrictMode).length > 0;
     if (anyRuleIsEnforced) await removeAllRules();
@@ -169,6 +121,43 @@ async function fetchAndApplyScionPAC() {
 
     // reset the rules based on the values stored in storage
     if (anyRuleIsEnforced) await globalStrictModeUpdated();
+}
+
+function parseProxyFromPAC(pacScript: string): ProxyConfig {
+    // We look for the first HTTPS definition, if not found, we look for the first HTTP definition.
+    const httpsProxyMatch = pacScript.match(/HTTPS\s+([^:]+):(\d+)/i);
+    const httpProxyMatch = pacScript.match(/PROXY\s+([^:]+):(\d+)/i);
+
+    if (httpsProxyMatch) {
+        if (!isValidPort(httpsProxyMatch[2])) {
+            console.warn("Invalid port number in PAC script");
+            return null;
+        }
+        return {
+            proxyScheme: HTTPS_PROXY_SCHEME,
+            proxyHost: httpsProxyMatch[1],
+            proxyPort: httpsProxyMatch[2]
+        };
+    } else if (httpProxyMatch) {
+        if (!isValidPort(httpProxyMatch[2])) {
+            console.warn("Invalid port number in PAC script");
+            return null;
+        }
+        return {
+            proxyScheme: HTTP_PROXY_SCHEME,
+            proxyHost: httpProxyMatch[1],
+            proxyPort: httpProxyMatch[2]
+        };
+    } else {
+        console.warn("No valid proxy configuration found in PAC script");
+    }
+
+    return null;
+}
+
+function isValidPort(port: string) {
+    const portNum = parseInt(port, 10);
+    return !isNaN(portNum) && portNum > 0 && portNum <= 65535;
 }
 
 async function fallbackToDefaults() {
